@@ -2,19 +2,9 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>America First Scorecard</title>
+  <title>America First Scorecard – Member</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <style>
-    .name-link {
-      color: #ffffff;
-      text-decoration: none;
-      font-weight: 500;
-    }
-
-    .name-link:hover {
-      text-decoration: underline;
-    }
-
     :root {
       --blue: #002b5c;
       --red: #c8102e;
@@ -48,7 +38,7 @@
     header {
       position: relative;
       text-align: center;
-      padding: 1.5rem 1rem 0.5rem;
+      padding: 1.2rem 1rem 0.7rem;
       border-bottom: 2px solid var(--border-color);
       background: linear-gradient(
         to bottom,
@@ -59,52 +49,42 @@
     }
 
     header img {
-      max-width: 260px;
+      max-width: 220px;
       width: 40vw;
       height: auto;
       display: block;
-      margin: 0 auto 0.75rem;
+      margin: 0 auto 0.5rem;
     }
 
     header h1 {
-      font-size: clamp(1.8rem, 3vw, 2.4rem);
+      font-size: clamp(1.6rem, 3vw, 2.1rem);
       letter-spacing: 0.06em;
       text-transform: uppercase;
       color: var(--white);
     }
 
-    .admin-toggle {
+    .back-link {
       position: absolute;
-      top: 1rem;
-      right: 1rem;
-      display: flex;
+      left: 1rem;
+      top: 1.1rem;
+      font-size: 0.9rem;
+      color: #cfd6ea;
+      text-decoration: none;
+      display: inline-flex;
       align-items: center;
-      gap: 0.4rem;
-      font-size: 0.85rem;
+      gap: 0.3rem;
     }
 
-    .admin-toggle span {
-      opacity: 0.9;
+    .back-link span {
+      font-size: 0.9rem;
     }
 
-    .admin-btn {
-      border-radius: 999px;
-      border: 1px solid var(--border-color);
-      padding: 0.35rem 0.8rem;
-      background: #04142d;
-      color: var(--text-light);
-      font-size: 0.85rem;
-      cursor: pointer;
-    }
-
-    .admin-btn.admin-active {
-      background: var(--red);
-      border-color: #ff4a63;
-      font-weight: 600;
+    .back-link:hover {
+      text-decoration: underline;
     }
 
     main {
-      max-width: 1100px;
+      max-width: 900px;
       width: 100%;
       margin: 1.5rem auto 2rem;
       padding: 0 1rem 2rem;
@@ -119,455 +99,491 @@
       padding: 1.5rem;
     }
 
-    .card-header {
+    .member-header {
       display: flex;
       flex-wrap: wrap;
-      justify-content: space-between;
+      gap: 1rem;
       align-items: center;
-      gap: 0.75rem;
-      margin-bottom: 1rem;
-    }
-
-    .card-header h2 {
-      font-size: 1.25rem;
-    }
-
-    .controls {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.5rem;
-    }
-
-    button,
-    select,
-    input[type="search"],
-    input[type="password"] {
-      border-radius: 999px;
-      border: 1px solid var(--border-color);
-      padding: 0.4rem 0.8rem;
-      background: #04142d;
-      color: var(--text-light);
-      font-size: 0.9rem;
-    }
-
-    button {
-      cursor: pointer;
-      background: var(--red);
-      border-color: #ff4a63;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-    }
-
-    button:hover {
-      filter: brightness(1.08);
-    }
-
-    input[type="search"] {
-      min-width: 180px;
-    }
-
-    .table-wrapper {
-      width: 100%;
-      overflow-x: auto;
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 0.5rem;
-      font-size: 0.92rem;
-      min-width: 650px;
-    }
-
-    thead {
-      background: #04142d;
-    }
-
-    th,
-    td {
-      padding: 0.55rem 0.5rem;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-      text-align: left;
-      white-space: nowrap;
-      vertical-align: middle;
-    }
-
-    th {
-      font-size: 0.78rem;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      color: #c9d3e8;
-    }
-
-    tbody tr:nth-child(even) {
-      background: rgba(255, 255, 255, 0.01);
-    }
-
-    tbody tr:hover {
-      background: rgba(255, 255, 255, 0.05);
-    }
-
-    tr.draggable-row {
-      cursor: grab;
-    }
-
-    tr.drag-over {
-      outline: 2px dashed rgba(255, 255, 255, 0.5);
-      outline-offset: -2px;
-    }
-
-    td input,
-    td select {
-      width: 100%;
-      padding: 0.3rem 0.4rem;
-      border-radius: 8px;
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      background: rgba(3, 18, 40, 0.8);
-      color: var(--text-light);
-      font-size: 0.9rem;
-    }
-
-    td input[disabled],
-    td select[disabled] {
-      opacity: 0.7;
-      cursor: default;
-    }
-
-    td input[type="number"] {
-      text-align: right;
-    }
-
-    .row-actions {
-      display: flex;
-      flex-direction: column;
-      gap: 0.3rem;
-    }
-
-    .row-actions button {
-      font-size: 0.75rem;
-      padding: 0.3rem 0.6rem;
-      text-transform: none;
-      letter-spacing: 0;
-    }
-
-    .row-actions .remove-btn {
-      background: transparent;
-      border-color: rgba(255, 255, 255, 0.25);
-    }
-
-    .row-actions .edit-btn {
-      background: #04142d;
-      border-color: rgba(255, 255, 255, 0.35);
-    }
-
-    .row-actions .edit-btn.editing {
-      background: var(--red);
-      border-color: #ff4a63;
-    }
-
-    .row-actions .trend-btn {
-      background: transparent;
-      border-color: rgba(255, 255, 255, 0.25);
-    }
-
-    .row-actions .trend-btn.on {
-      border-color: #ffb347;
-    }
-
-    .photo-cell {
-      display: flex;
-      flex-direction: column;
-      align-items: flex-start;
-      gap: 0.3rem;
+      margin-bottom: 1.25rem;
     }
 
     .photo-wrapper {
       position: relative;
-      display: inline-block;
-    }
-
-    .photo-wrapper img {
-      width: 42px;
-      height: 42px;
+      width: 90px;
+      height: 90px;
       border-radius: 50%;
-      object-fit: cover;
-      border: 1px solid rgba(255, 255, 255, 0.4);
       background: #081630;
-    }
-
-    .photo-wrapper .placeholder {
-      width: 42px;
-      height: 42px;
-      border-radius: 50%;
-      border: 1px dashed rgba(255, 255, 255, 0.4);
+      border: 2px solid rgba(255, 255, 255, 0.5);
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 0.65rem;
-      text-transform: uppercase;
-      opacity: 0.75;
-      background: #081630;
+      overflow: hidden;
+      flex-shrink: 0;
     }
 
-    .trending-icon {
-      position: absolute;
-      top: -6px;
-      right: -6px;
-      font-size: 1rem;
-      filter: drop-shadow(0 0 4px rgba(0, 0, 0, 0.7));
+    .photo-wrapper img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
     }
 
-    .photo-cell input[type="file"] {
+    .photo-placeholder {
       font-size: 0.7rem;
-      padding: 0.1rem;
+      text-transform: uppercase;
+      opacity: 0.8;
+      text-align: center;
+      padding: 0.3rem;
+    }
+
+    .trending-badge {
+      position: absolute;
+      bottom: -4px;
+      right: -4px;
+      background: #ff8a00;
       border-radius: 999px;
-      border: 1px solid rgba(255, 255, 255, 0.3);
+      padding: 0.1rem 0.5rem;
+      font-size: 0.75rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.2rem;
+      color: #1b1305;
+      font-weight: 600;
+      box-shadow: 0 0 6px rgba(0, 0, 0, 0.6);
+    }
+
+    .member-meta {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .member-name {
+      font-size: 1.5rem;
+      font-weight: 600;
+      margin-bottom: 0.2rem;
+    }
+
+    .member-line {
+      font-size: 0.95rem;
+      color: #d4ddf2;
+      margin-bottom: 0.2rem;
+    }
+
+    .member-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      margin-top: 0.4rem;
+    }
+
+    .tag {
+      padding: 0.15rem 0.5rem;
+      font-size: 0.8rem;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.35);
       background: rgba(4, 20, 45, 0.9);
     }
 
-    .display-text {
+    .scores-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 1rem;
+      margin-top: 1.25rem;
+    }
+
+    .score-card {
+      background: rgba(3, 18, 40, 0.95);
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      padding: 0.9rem 0.95rem;
+    }
+
+    .score-label {
+      font-size: 0.85rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: #c9d3e8;
+      margin-bottom: 0.25rem;
+    }
+
+    .score-value {
+      font-size: 1.35rem;
+      font-weight: 600;
+    }
+
+    .score-subtext {
+      margin-top: 0.1rem;
+      font-size: 0.8rem;
+      color: #cfd6ea;
+      opacity: 0.9;
+    }
+
+    .meta-section {
+      margin-top: 1.4rem;
       font-size: 0.9rem;
+      line-height: 1.5;
+      color: #d6def5;
+    }
+
+    .meta-section h3 {
+      font-size: 1rem;
+      margin-bottom: 0.4rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #f0f3ff;
+    }
+
+    .meta-list {
+      list-style: none;
+    }
+
+    .meta-list li {
+      margin-bottom: 0.25rem;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      padding: 0.1rem 0.4rem;
+      border-radius: 999px;
+      font-size: 0.8rem;
+      background: rgba(0, 0, 0, 0.2);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .votes-section {
+      margin-top: 1.6rem;
+      font-size: 0.9rem;
+      color: #d6def5;
+    }
+
+    .votes-section h3 {
+      font-size: 1rem;
+      margin-bottom: 0.4rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #f0f3ff;
+    }
+
+    .votes-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+
+    .vote-item {
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(3, 18, 40, 0.95);
+      padding: 0.75rem 0.85rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .vote-header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 0.35rem;
+      margin-bottom: 0.25rem;
+    }
+
+    .vote-title {
+      font-weight: 600;
+    }
+
+    .vote-date {
+      font-size: 0.8rem;
+      opacity: 0.8;
+    }
+
+    .vote-tags {
+      margin-top: 0.2rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+      font-size: 0.78rem;
+    }
+
+    .vote-desc {
+      margin-top: 0.3rem;
+      font-size: 0.85rem;
+      opacity: 0.9;
+    }
+
+    .vote-link {
+      margin-top: 0.25rem;
+      font-size: 0.8rem;
+    }
+
+    .vote-link a {
+      color: #cfe2ff;
+      text-decoration: none;
+    }
+
+    .vote-link a:hover {
+      text-decoration: underline;
+    }
+
+    .bill-tag-af {
+      border-color: #46ff9a;
+      background: rgba(7, 61, 32, 0.8);
+    }
+
+    .bill-tag-neutral {
+      border-color: #ffd966;
+      background: rgba(77, 63, 12, 0.7);
+    }
+
+    .bill-tag-anti {
+      border-color: #ff6b81;
+      background: rgba(81, 15, 19, 0.8);
+    }
+
+    .vote-tag-yes {
+      border-color: #46ff9a;
+      background: rgba(7, 61, 32, 0.8);
+    }
+
+    .vote-tag-no {
+      border-color: #ff6b81;
+      background: rgba(81, 15, 19, 0.8);
+    }
+
+    .vote-tag-abstain {
+      border-color: #ffd966;
+      background: rgba(77, 63, 12, 0.7);
     }
 
     .footnote {
-      margin-top: 0.75rem;
+      margin-top: 1.2rem;
       font-size: 0.8rem;
       color: #c0c8da;
       opacity: 0.9;
     }
 
-    .admin-login-panel {
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: rgba(0, 0, 0, 0.65);
-      display: none;
-      align-items: center;
-      justify-content: center;
-      z-index: 20;
+    .loading,
+    .error {
+      text-align: center;
+      margin-top: 2rem;
+      font-size: 1rem;
     }
 
-    .admin-login-panel.active {
-      display: flex;
-    }
-
-    .admin-login-card {
-      background: #04142d;
-      padding: 1.4rem 1.6rem;
-      border-radius: 16px;
-      border: 1px solid var(--border-color);
-      max-width: 320px;
-      width: 92%;
-      color: var(--text-light);
-    }
-
-    .admin-login-card h3 {
-      margin-bottom: 0.6rem;
-    }
-
-    .admin-login-card p {
-      font-size: 0.82rem;
-      margin-bottom: 0.7rem;
-      line-height: 1.3;
-    }
-
-    .admin-login-card form {
-      display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
-      margin-top: 0.4rem;
-    }
-
-    .admin-login-card input[type="password"] {
-      border-radius: 10px;
-      width: 100%;
-    }
-
-    .admin-login-card .actions {
-      display: flex;
-      justify-content: flex-end;
-      gap: 0.5rem;
-      margin-top: 0.3rem;
-    }
-
-    .admin-login-card .secondary {
-      background: transparent;
-      border-color: var(--border-color);
-      text-transform: none;
-      letter-spacing: 0;
-      font-weight: 500;
-    }
-
-    .error-msg {
+    .error {
       color: #ffb3c2;
-      font-size: 0.78rem;
-      min-height: 1rem;
     }
 
-    .pagination {
-      margin-top: 0.9rem;
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.4rem;
-      align-items: center;
-      justify-content: flex-end;
-      font-size: 0.85rem;
+    .admin-bills-section {
+      margin-top: 1.8rem;
+      padding-top: 1.1rem;
+      border-top: 1px solid rgba(255, 255, 255, 0.12);
+      font-size: 0.9rem;
     }
 
-    .pagination button {
-      padding: 0.25rem 0.6rem;
+    .admin-bills-section h3 {
+      font-size: 0.95rem;
+      margin-bottom: 0.4rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #f0f3ff;
+    }
+
+    .admin-bills-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+      gap: 1rem;
+    }
+
+    .admin-bills-section label {
+      display: block;
       font-size: 0.8rem;
-      text-transform: none;
-      letter-spacing: 0;
-      background: #04142d;
-      border-color: rgba(255, 255, 255, 0.3);
+      margin-bottom: 0.15rem;
+      color: #d4ddf2;
     }
 
-    .pagination button.current {
+    .admin-bills-section input,
+    .admin-bills-section select,
+    .admin-bills-section textarea {
+      width: 100%;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: rgba(3, 18, 40, 0.95);
+      color: var(--text-light);
+      font-size: 0.85rem;
+      padding: 0.3rem 0.4rem;
+      margin-bottom: 0.45rem;
+    }
+
+    .admin-bills-section textarea {
+      min-height: 70px;
+      resize: vertical;
+    }
+
+    .admin-bills-section button {
+      border-radius: 999px;
+      border: 1px solid #ff4a63;
       background: var(--red);
-      border-color: #ff4a63;
-      font-weight: 600;
+      color: var(--text-light);
+      font-size: 0.85rem;
+      padding: 0.35rem 0.9rem;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
     }
 
-    .pagination button:disabled {
-      opacity: 0.5;
-      cursor: default;
+    .admin-bills-section button:hover {
+      filter: brightness(1.08);
     }
 
-    @media (max-width: 900px) {
-      th:nth-child(4),
-      td:nth-child(4),
-      th:nth-child(5),
-      td:nth-child(5) {
-        display: none;
+    @media (max-width: 640px) {
+      .member-header {
+        align-items: flex-start;
       }
-    }
-
-    @media (max-width: 720px) {
-      header img {
-        max-width: 210px;
+      .member-name {
+        font-size: 1.3rem;
       }
-      .card {
-        padding: 1.1rem;
+      .scores-grid {
+        grid-template-columns: 1fr;
       }
-      table {
-        font-size: 0.85rem;
-      }
-      .row-actions {
-        flex-direction: row;
-        flex-wrap: wrap;
+      .admin-bills-grid {
+        grid-template-columns: 1fr;
       }
     }
   </style>
 </head>
 <body>
   <header>
+    <a href="index.html" class="back-link">
+      <span>← Back</span>
+    </a>
     <img src="af-logo.png" alt="America First Logo" />
-
-    <div class="admin-toggle">
-      <span id="adminStatus">Viewer</span>
-      <button class="admin-btn" id="adminToggleBtn">Admin Login</button>
-    </div>
-
     <h1>America First Scorecard</h1>
   </header>
 
   <main>
     <section class="card">
-      <div class="card-header">
-        <h2>Member Scorecards</h2>
-        <div class="controls">
-          <input
-            type="search"
-            id="searchInput"
-            placeholder="Search by name, state, or party..."
-          />
-          <select id="chamberFilter">
-            <option value="all">All Chambers</option>
-            <option value="House">House</option>
-            <option value="Senate">Senate</option>
-          </select>
-          <button id="addMemberBtn">Add Member</button>
+      <div id="loading" class="loading">Loading member…</div>
+      <div id="error" class="error" style="display:none;"></div>
+
+      <div id="content" style="display:none;">
+        <div class="member-header">
+          <div class="photo-wrapper" id="photoWrapper"></div>
+          <div class="member-meta">
+            <div class="member-name" id="memberName"></div>
+            <div class="member-line" id="memberLine"></div>
+            <div class="member-tags" id="memberTags"></div>
+          </div>
         </div>
+
+        <div class="scores-grid">
+          <div class="score-card">
+            <div class="score-label">Lifetime Score</div>
+            <div class="score-value" id="lifetimeScore">–</div>
+            <div class="score-subtext">
+              Overall alignment with America First priorities over career voting history.
+            </div>
+          </div>
+          <div class="score-card">
+            <div class="score-label">Current Congress Score</div>
+            <div class="score-value" id="currentScore">–</div>
+            <div class="score-subtext">
+              Alignment in the current Congress only.
+            </div>
+          </div>
+        </div>
+
+        <div class="meta-section">
+          <h3>Member Details</h3>
+          <ul class="meta-list" id="metaList"></ul>
+        </div>
+
+        <!-- Voting record (everyone can see) -->
+        <div class="votes-section">
+          <h3>Voting Record</h3>
+          <ul class="votes-list" id="votesList"></ul>
+        </div>
+
+        <!-- Admin-only tools: add bills + attach vote -->
+        <div class="admin-bills-section" id="adminBillsSection" style="display:none;">
+          <h3>Admin – Manage Bills & Votes</h3>
+          <div class="admin-bills-grid">
+            <!-- Add bill -->
+            <div>
+              <p style="margin-bottom:0.4rem;font-size:0.85rem;opacity:0.9;">
+                Add a new bill to the global list. Once added, you can attach it to this member
+                (and others) with their vote.
+              </p>
+              <form id="addBillForm">
+                <label for="billTitle">Bill title</label>
+                <input id="billTitle" name="title" required />
+
+                <label for="billChamber">Chamber</label>
+                <select id="billChamber" name="chamber">
+                  <option value="">Both / Other</option>
+                  <option value="House">House</option>
+                  <option value="Senate">Senate</option>
+                </select>
+
+                <label for="billAFPosition">America First classification</label>
+                <select id="billAFPosition" name="afPosition">
+                  <option value="America First">America First</option>
+                  <option value="Neither">Neither</option>
+                  <option value="Anti-America First">Anti-America First</option>
+                </select>
+
+                <label for="billDate">Bill date (vote date)</label>
+                <input id="billDate" name="billDate" type="date" />
+
+                <label for="billGovLink">Gov link (if applicable)</label>
+                <input id="billGovLink" name="govLink" type="url" placeholder="https://..." />
+
+                <label for="billDescription">Description</label>
+                <textarea id="billDescription" name="description"></textarea>
+
+                <button type="submit">Add Bill</button>
+              </form>
+            </div>
+
+            <!-- Attach to this member -->
+            <div>
+              <p style="margin-bottom:0.4rem;font-size:0.85rem;opacity:0.9;">
+                Attach an existing bill to this member and record whether they
+                approved or opposed it.
+              </p>
+              <form id="attachBillForm">
+                <label for="billSelect">Select bill</label>
+                <select id="billSelect" name="billId">
+                  <!-- options injected -->
+                </select>
+
+                <label for="voteSelect">How did this member vote?</label>
+                <select id="voteSelect" name="vote">
+                  <option value="Approved">Approved / Yes</option>
+                  <option value="Opposed">Opposed / No</option>
+                  <option value="Abstained">Abstained</option>
+                </select>
+
+                <button type="submit" style="margin-top:0.4rem;">Add to Scorecard</button>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        <p class="footnote">
+          All scores and votes are based on the America First Scorecard rubric and
+          may be updated as new bills and votes are recorded.
+        </p>
       </div>
-
-      <div class="table-wrapper">
-        <table>
-          <thead>
-            <tr>
-              <th>Photo</th>
-              <th>Name</th>
-              <th>Chamber</th>
-              <th>State</th>
-              <th>Party</th>
-              <th>Lifetime Score (%)</th>
-              <th>Current Congress (%)</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody id="memberTableBody"></tbody>
-        </table>
-      </div>
-
-      <div class="pagination" id="pagination"></div>
-
-      <p class="footnote">
-        Scores and photos are view-only for visitors. Admins can edit
-        individual politicians, drag to reorder, toggle trending, and upload portraits.
-      </p>
     </section>
   </main>
 
-  <!-- Admin login modal -->
-  <div class="admin-login-panel" id="adminLoginPanel">
-    <div class="admin-login-card">
-      <h3>Admin Login</h3>
-      <p>Enter the admin password to edit scores, add members, and upload photos.</p>
-      <form id="adminLoginForm">
-        <input
-          type="password"
-          id="adminPasswordInput"
-          placeholder="Admin password"
-          autocomplete="current-password"
-        />
-        <div class="error-msg" id="adminError"></div>
-        <div class="actions">
-          <button type="button" class="secondary" id="adminCancelBtn">
-            Cancel
-          </button>
-          <button type="submit">Login</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
   <script>
     const API_BASE = ""; // same origin
-
-    let members = [];
+    let memberId = null;
+    let member = null;
     let isAdmin = false;
     let token = localStorage.getItem("afToken") || null;
-    const editingIds = new Set();
-    let currentPage = 1;
-    const pageSize = 10;
-
-    // DOM
-    const tbody = document.getElementById("memberTableBody");
-    const searchInput = document.getElementById("searchInput");
-    const chamberFilter = document.getElementById("chamberFilter");
-    const addMemberBtn = document.getElementById("addMemberBtn");
-
-    const adminStatus = document.getElementById("adminStatus");
-    const adminToggleBtn = document.getElementById("adminToggleBtn");
-    const adminLoginPanel = document.getElementById("adminLoginPanel");
-    const adminLoginForm = document.getElementById("adminLoginForm");
-    const adminPasswordInput = document.getElementById("adminPasswordInput");
-    const adminCancelBtn = document.getElementById("adminCancelBtn");
-    const adminError = document.getElementById("adminError");
-    const paginationEl = document.getElementById("pagination");
+    let memberVotes = [];
+    let availableBills = [];
 
     function authHeaders(extra = {}) {
       const headers = { ...extra };
@@ -575,514 +591,417 @@
       return headers;
     }
 
-    function updateAdminUI() {
-      if (isAdmin) {
-        adminStatus.textContent = "Admin";
-        adminToggleBtn.textContent = "Logout";
-        adminToggleBtn.classList.add("admin-active");
-        addMemberBtn.style.display = "inline-block";
-      } else {
-        adminStatus.textContent = "Viewer";
-        adminToggleBtn.textContent = "Admin Login";
-        adminToggleBtn.classList.remove("admin-active");
-        addMemberBtn.style.display = "none";
-        editingIds.clear();
-      }
+    function getMemberIdFromUrl() {
+      const params = new URLSearchParams(window.location.search);
+      return params.get("id");
     }
 
-    function getFilteredMembers() {
-      const searchTerm = searchInput.value.trim().toLowerCase();
-      const chamberValue = chamberFilter.value;
+    async function loadMember() {
+      memberId = getMemberIdFromUrl();
+      const loadingEl = document.getElementById("loading");
+      const errorEl = document.getElementById("error");
+      const contentEl = document.getElementById("content");
 
-      return members.filter((m) => {
-        const chamberMatch =
-          chamberValue === "all" || m.chamber === chamberValue;
-        const text = `${m.name} ${m.state} ${m.party}`.toLowerCase();
-        const searchMatch = text.includes(searchTerm);
-        return chamberMatch && searchMatch;
-      });
-    }
-
-    function renderPagination(filtered) {
-      const total = filtered.length;
-      const pageCount = Math.max(1, Math.ceil(total / pageSize));
-
-      if (currentPage > pageCount) currentPage = pageCount;
-
-      paginationEl.innerHTML = "";
-
-      const infoSpan = document.createElement("span");
-      const start = total === 0 ? 0 : (currentPage - 1) * pageSize + 1;
-      const end = Math.min(currentPage * pageSize, total);
-      infoSpan.textContent = total
-        ? `Showing ${start}-${end} of ${total}`
-        : "No results";
-      paginationEl.appendChild(infoSpan);
-
-      const controls = document.createElement("div");
-      controls.style.display = "flex";
-      controls.style.gap = "0.3rem";
-      controls.style.alignItems = "center";
-
-      const prevBtn = document.createElement("button");
-      prevBtn.textContent = "Prev";
-      prevBtn.disabled = currentPage === 1;
-      prevBtn.onclick = () => {
-        if (currentPage > 1) {
-          currentPage--;
-          renderTable();
-        }
-      };
-      controls.appendChild(prevBtn);
-
-      for (let p = 1; p <= pageCount; p++) {
-        const btn = document.createElement("button");
-        btn.textContent = p;
-        if (p === currentPage) btn.classList.add("current");
-        btn.onclick = () => {
-          currentPage = p;
-          renderTable();
-        };
-        controls.appendChild(btn);
-      }
-
-      const nextBtn = document.createElement("button");
-      nextBtn.textContent = "Next";
-      nextBtn.disabled = currentPage === pageCount;
-      nextBtn.onclick = () => {
-        if (currentPage < pageCount) {
-          currentPage++;
-          renderTable();
-        }
-      };
-      controls.appendChild(nextBtn);
-
-      paginationEl.appendChild(controls);
-    }
-
-    function renderTable() {
-      const filtered = getFilteredMembers();
-      renderPagination(filtered);
-
-      tbody.innerHTML = "";
-
-      const total = filtered.length;
-      const pageCount = Math.max(1, Math.ceil(total / pageSize));
-      if (currentPage > pageCount) currentPage = pageCount;
-
-      const startIndex = (currentPage - 1) * pageSize;
-      const endIndex = Math.min(startIndex + pageSize, total);
-      const pageItems = filtered.slice(startIndex, endIndex);
-
-      pageItems.forEach((member) => {
-        const tr = document.createElement("tr");
-        tr.dataset.id = member.id;
-
-        const isEditing = isAdmin && editingIds.has(member.id);
-
-        if (isAdmin) {
-          tr.classList.add("draggable-row");
-          tr.setAttribute("draggable", "true");
-        } else {
-          tr.classList.remove("draggable-row");
-          tr.removeAttribute("draggable");
-        }
-
-        const photoDisplay = `
-          <div class="photo-cell">
-            <div class="photo-wrapper">
-              ${
-                member.imageData
-                  ? `<img src="${member.imageData}" alt="${member.name}">`
-                  : `<div class="placeholder">No photo</div>`
-              }
-              ${member.trending ? '<span class="trending-icon">🔥</span>' : ""}
-            </div>
-            ${
-              isEditing
-                ? `<input type="file" name="photo" accept="image/*">`
-                : ""
-            }
-          </div>
-        `;
-
-        const nameCell = isEditing
-          ? `<input type="text" name="name" value="${member.name || ""}" />`
-          : `<a href="member.html?id=${member.id}" class="name-link">${member.name || ""}</a>`;
-
-        const chamberCell = isEditing
-          ? `<select name="chamber">
-               <option value="House" ${
-                 member.chamber === "House" ? "selected" : ""
-               }>House</option>
-               <option value="Senate" ${
-                 member.chamber === "Senate" ? "selected" : ""
-               }>Senate</option>
-             </select>`
-          : `<span class="display-text">${member.chamber || ""}</span>`;
-
-        const stateCell = isEditing
-          ? `<input type="text" name="state" maxlength="2" value="${
-              member.state || ""
-            }" />`
-          : `<span class="display-text">${member.state || ""}</span>`;
-
-        const partyCell = isEditing
-          ? `<input type="text" name="party" maxlength="3" value="${
-              member.party || ""
-            }" />`
-          : `<span class="display-text">${member.party || ""}</span>`;
-
-        const lifetimeCell = isEditing
-          ? `<input type="number" name="lifetimeScore" min="0" max="100" step="0.1" value="${
-              member.lifetimeScore ?? ""
-            }" />`
-          : `<span class="display-text">${
-              member.lifetimeScore ?? ""
-            }</span>`;
-
-        const currentCell = isEditing
-          ? `<input type="number" name="currentScore" min="0" max="100" step="0.1" value="${
-              member.currentScore ?? ""
-            }" />`
-          : `<span class="display-text">${
-              member.currentScore ?? ""
-            }</span>`;
-
-        const actionsCell = isAdmin
-          ? `
-            <div class="row-actions">
-              <button type="button"
-                      class="edit-btn ${isEditing ? "editing" : ""}"
-                      data-action="toggle-edit">
-                ${isEditing ? "Done" : "Edit"}
-              </button>
-              <button type="button"
-                      class="trend-btn ${member.trending ? "on" : ""}"
-                      data-action="toggle-trending">
-                Trending 🔥
-              </button>
-              ${
-                isEditing
-                  ? `<button type="button"
-                            class="remove-btn"
-                            data-action="remove">
-                       Remove
-                     </button>`
-                  : ""
-              }
-            </div>
-          `
-          : "";
-
-        tr.innerHTML = `
-          <td>${photoDisplay}</td>
-          <td>${nameCell}</td>
-          <td>${chamberCell}</td>
-          <td>${stateCell}</td>
-          <td>${partyCell}</td>
-          <td>${lifetimeCell}</td>
-          <td>${currentCell}</td>
-          <td>${actionsCell}</td>
-        `;
-
-        tbody.appendChild(tr);
-      });
-    }
-
-    async function loadMembers() {
-      const res = await fetch(API_BASE + "/api/members");
-      members = await res.json();
-      // sort by position just in case
-      members.sort((a, b) => {
-        const pa = a.position ?? 999999;
-        const pb = b.position ?? 999999;
-        if (pa !== pb) return pa - pb;
-        return (a.name || "").localeCompare(b.name || "");
-      });
-      currentPage = 1;
-      renderTable();
-    }
-
-    function handleUnauthorized() {
-      token = null;
-      localStorage.removeItem("afToken");
-      isAdmin = false;
-      editingIds.clear();
-      updateAdminUI();
-      alert("Your admin session expired or the server restarted. Please log in again.");
-    }
-
-    async function addMember() {
-      if (!isAdmin || !token) return;
-      const res = await fetch(API_BASE + "/api/members", {
-        method: "POST",
-        headers: authHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify({})
-      });
-      if (res.status === 401) return handleUnauthorized();
-      const member = await res.json();
-      members.push(member);
-      editingIds.add(member.id);
-      currentPage = Math.ceil(members.length / pageSize);
-      renderTable();
-    }
-
-    async function updateMember(id, updates) {
-      if (!isAdmin || !token) return;
-      const res = await fetch(API_BASE + "/api/members/" + id, {
-        method: "PUT",
-        headers: authHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify(updates)
-      });
-      if (res.status === 401) return handleUnauthorized();
-      const updated = await res.json();
-      const idx = members.findIndex((m) => m.id === id);
-      if (idx !== -1) {
-        members[idx] = updated;
-        renderTable();
-      }
-    }
-
-    async function deleteMember(id) {
-      if (!isAdmin || !token) return;
-      const res = await fetch(API_BASE + "/api/members/" + id, {
-        method: "DELETE",
-        headers: authHeaders()
-      });
-      if (res.status === 401) return handleUnauthorized();
-      members = members.filter((m) => m.id !== id);
-      editingIds.delete(id);
-      if ((currentPage - 1) * pageSize >= members.length) {
-        currentPage = Math.max(1, Math.ceil(members.length / pageSize));
-      }
-      renderTable();
-    }
-
-    async function saveOrderToServer() {
-      if (!isAdmin || !token) return;
-      const ids = members.map((m) => m.id);
-      const res = await fetch(API_BASE + "/api/members/reorder", {
-        method: "POST",
-        headers: authHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify({ ids })
-      });
-      if (res.status === 401) return handleUnauthorized();
-    }
-
-    // table events
-
-    // update fields on change / blur (no "every key" glitch)
-    tbody.addEventListener("change", (e) => {
-      if (!isAdmin) return;
-      const target = e.target;
-
-      if (target.tagName === "INPUT" || target.tagName === "SELECT") {
-        if (target.type === "file") return; // handled separately
-        const row = target.closest("tr");
-        if (!row) return;
-        const id = row.dataset.id;
-        const field = target.name;
-        let value = target.value;
-
-        if (field === "lifetimeScore" || field === "currentScore") {
-          value = value === "" ? null : parseFloat(value);
-        }
-        updateMember(id, { [field]: value });
-      }
-    });
-
-    tbody.addEventListener("blur", (e) => {
-      if (!isAdmin) return;
-      const target = e.target;
-      if (
-        !(
-          target.tagName === "INPUT" ||
-          target.tagName === "SELECT"
-        )
-      ) {
+      if (!memberId) {
+        loadingEl.style.display = "none";
+        errorEl.style.display = "block";
+        errorEl.textContent = "No member id provided.";
         return;
       }
-      if (target.type === "file") return;
-      const row = target.closest("tr");
-      if (!row) return;
-      const id = row.dataset.id;
-      const field = target.name;
-      let value = target.value;
-      if (field === "lifetimeScore" || field === "currentScore") {
-        value = value === "" ? null : parseFloat(value);
-      }
-      updateMember(id, { [field]: value });
-    }, true);
 
-    tbody.addEventListener("click", (e) => {
-      if (!isAdmin) return;
-      const btn = e.target.closest("button");
-      if (!btn) return;
-
-      const row = btn.closest("tr");
-      if (!row) return;
-      const id = row.dataset.id;
-      const action = btn.dataset.action;
-
-      if (action === "toggle-edit") {
-        if (editingIds.has(id)) {
-          editingIds.delete(id);
-        } else {
-          editingIds.add(id);
-        }
-        renderTable();
-      } else if (action === "toggle-trending") {
-        const member = members.find((m) => m.id === id);
-        if (!member) return;
-        updateMember(id, { trending: !member.trending });
-      } else if (action === "remove") {
-        if (confirm("Remove this member?")) {
-          deleteMember(id);
-        }
-      }
-    });
-
-    // file upload
-    tbody.addEventListener("change", (e) => {
-      if (!isAdmin) return;
-      const input = e.target;
-      if (input.type === "file" && input.name === "photo") {
-        const row = input.closest("tr");
-        const id = row.dataset.id;
-        const file = input.files[0];
-        if (!file) return;
-
-        const reader = new FileReader();
-        reader.onload = function (ev) {
-          const dataUrl = ev.target.result;
-          updateMember(id, { imageData: dataUrl });
-        };
-        reader.readAsDataURL(file);
-      }
-    });
-
-    // drag & drop reordering
-    let dragSrcId = null;
-
-    tbody.addEventListener("dragstart", (e) => {
-      if (!isAdmin) return;
-      const row = e.target.closest("tr.draggable-row");
-      if (!row) return;
-      dragSrcId = row.dataset.id;
-      e.dataTransfer.effectAllowed = "move";
-    });
-
-    tbody.addEventListener("dragover", (e) => {
-      if (!isAdmin) return;
-      const row = e.target.closest("tr.draggable-row");
-      if (!row) return;
-      e.preventDefault();
-      row.classList.add("drag-over");
-    });
-
-    tbody.addEventListener("dragleave", (e) => {
-      const row = e.target.closest("tr.draggable-row");
-      if (!row) return;
-      row.classList.remove("drag-over");
-    });
-
-    tbody.addEventListener("drop", async (e) => {
-      if (!isAdmin) return;
-      e.preventDefault();
-      const row = e.target.closest("tr.draggable-row");
-      if (!row) return;
-      row.classList.remove("drag-over");
-
-      const targetId = row.dataset.id;
-      if (!dragSrcId || dragSrcId === targetId) return;
-
-      const srcIndex = members.findIndex((m) => m.id === dragSrcId);
-      const targetIndex = members.findIndex((m) => m.id === targetId);
-      if (srcIndex === -1 || targetIndex === -1) return;
-
-      const [moved] = members.splice(srcIndex, 1);
-      members.splice(targetIndex, 0, moved);
-
-      await saveOrderToServer();
-      renderTable();
-    });
-
-    addMemberBtn.addEventListener("click", addMember);
-    searchInput.addEventListener("input", () => {
-      currentPage = 1;
-      renderTable();
-    });
-    chamberFilter.addEventListener("change", () => {
-      currentPage = 1;
-      renderTable();
-    });
-
-    // admin login
-    adminToggleBtn.addEventListener("click", () => {
-      if (isAdmin) {
-        token = null;
-        isAdmin = false;
-        localStorage.removeItem("afToken");
-        editingIds.clear();
-        updateAdminUI();
-        renderTable();
-      } else {
-        adminError.textContent = "";
-        adminPasswordInput.value = "";
-        adminLoginPanel.classList.add("active");
-        setTimeout(() => adminPasswordInput.focus(), 50);
-      }
-    });
-
-    adminCancelBtn.addEventListener("click", () => {
-      adminLoginPanel.classList.remove("active");
-      adminError.textContent = "";
-    });
-
-    adminLoginPanel.addEventListener("click", (e) => {
-      if (e.target === adminLoginPanel) {
-        adminLoginPanel.classList.remove("active");
-        adminError.textContent = "";
-      }
-    });
-
-    adminLoginForm.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const password = adminPasswordInput.value || "";
-      adminError.textContent = "";
       try {
-        const res = await fetch(API_BASE + "/api/login", {
+        const res = await fetch(API_BASE + "/api/members/" + encodeURIComponent(memberId));
+        if (res.status === 404) {
+          loadingEl.style.display = "none";
+          errorEl.style.display = "block";
+          errorEl.textContent = "Member not found.";
+          return;
+        }
+        if (!res.ok) {
+          throw new Error("Request failed: " + res.status);
+        }
+
+        member = await res.json();
+        loadingEl.style.display = "none";
+        contentEl.style.display = "block";
+
+        renderMember(member);
+        await loadMemberVotes();
+        if (isAdmin) {
+          await loadAvailableBills();
+          updateAdminUI();
+        }
+      } catch (err) {
+        console.error(err);
+        loadingEl.style.display = "none";
+        errorEl.style.display = "block";
+        errorEl.textContent = "Error loading member.";
+      }
+    }
+
+    function renderMember(member) {
+      const photoWrapper = document.getElementById("photoWrapper");
+      const memberName = document.getElementById("memberName");
+      const memberLine = document.getElementById("memberLine");
+      const memberTags = document.getElementById("memberTags");
+      const lifetimeScore = document.getElementById("lifetimeScore");
+      const currentScore = document.getElementById("currentScore");
+      const metaList = document.getElementById("metaList");
+
+      // photo
+      photoWrapper.innerHTML = "";
+      if (member.imageData) {
+        const img = document.createElement("img");
+        img.src = member.imageData;
+        img.alt = member.name || "Member photo";
+        photoWrapper.appendChild(img);
+      } else {
+        const div = document.createElement("div");
+        div.className = "photo-placeholder";
+        div.textContent = "No photo";
+        photoWrapper.appendChild(div);
+      }
+
+      if (member.trending) {
+        const badge = document.createElement("div");
+        badge.className = "trending-badge";
+        badge.innerHTML = "🔥 <span>Trending</span>";
+        photoWrapper.appendChild(badge);
+      }
+
+      // name
+      memberName.textContent = member.name || "Unknown Member";
+
+      const chamber = member.chamber || "Unknown chamber";
+      const state = member.state ? member.state.toUpperCase() : "Unknown state";
+      const party = member.party || "Unknown party";
+      memberLine.textContent = `${chamber} • ${state} • ${party}`;
+
+      // tags
+      memberTags.innerHTML = "";
+      const tag1 = document.createElement("span");
+      tag1.className = "tag";
+      tag1.textContent = state;
+      memberTags.appendChild(tag1);
+
+      const tag2 = document.createElement("span");
+      tag2.className = "tag";
+      tag2.textContent = chamber;
+      memberTags.appendChild(tag2);
+
+      const tag3 = document.createElement("span");
+      tag3.className = "tag";
+      tag3.textContent = party;
+      memberTags.appendChild(tag3);
+
+      if (member.trending) {
+        const tagTrending = document.createElement("span");
+        tagTrending.className = "tag";
+        tagTrending.textContent = "Trending 🔥";
+        memberTags.appendChild(tagTrending);
+      }
+
+      // scores
+      lifetimeScore.textContent =
+        member.lifetimeScore !== null && member.lifetimeScore !== undefined
+          ? `${member.lifetimeScore.toFixed
+            ? member.lifetimeScore.toFixed(1)
+            : member.lifetimeScore} %`
+          : "–";
+
+      currentScore.textContent =
+        member.currentScore !== null && member.currentScore !== undefined
+          ? `${member.currentScore.toFixed
+            ? member.currentScore.toFixed(1)
+            : member.currentScore} %`
+          : "–";
+
+      // meta list
+      metaList.innerHTML = "";
+
+      const li1 = document.createElement("li");
+      li1.innerHTML = `<strong>Location:</strong> <span class="pill">State: ${state}</span>`;
+      metaList.appendChild(li1);
+
+      const li2 = document.createElement("li");
+      li2.innerHTML = `<strong>Chamber:</strong> <span class="pill">${chamber}</span>`;
+      metaList.appendChild(li2);
+
+      const li3 = document.createElement("li");
+      li3.innerHTML = `<strong>Party:</strong> <span class="pill">${party}</span>`;
+      metaList.appendChild(li3);
+
+      if (member.position != null) {
+        const li4 = document.createElement("li");
+        li4.innerHTML = `<strong>Ranking position:</strong> <span class="pill">#${member.position}</span>`;
+        metaList.appendChild(li4);
+      }
+    }
+
+    async function loadMemberVotes() {
+      const res = await fetch(
+        API_BASE + "/api/members/" + encodeURIComponent(memberId) + "/bills"
+      );
+      if (!res.ok) {
+        console.error("Error loading member votes:", res.status);
+        return;
+      }
+      memberVotes = await res.json();
+      renderVotes();
+    }
+
+    function renderVotes() {
+      const list = document.getElementById("votesList");
+      list.innerHTML = "";
+
+      if (!memberVotes.length) {
+        const li = document.createElement("li");
+        li.className = "vote-item";
+        li.textContent = "No recorded votes yet for this member.";
+        list.appendChild(li);
+        return;
+      }
+
+      memberVotes.forEach((item) => {
+        const li = document.createElement("li");
+        li.className = "vote-item";
+
+        const header = document.createElement("div");
+        header.className = "vote-header";
+
+        const titleSpan = document.createElement("span");
+        titleSpan.className = "vote-title";
+        titleSpan.textContent = item.title || "Unnamed bill";
+
+        const dateSpan = document.createElement("span");
+        dateSpan.className = "vote-date";
+        if (item.billDate) {
+          dateSpan.textContent = new Date(item.billDate).toLocaleDateString();
+        } else {
+          dateSpan.textContent = "Date unknown";
+        }
+
+        header.appendChild(titleSpan);
+        header.appendChild(dateSpan);
+        li.appendChild(header);
+
+        const tags = document.createElement("div");
+        tags.className = "vote-tags";
+
+        // AF classification tag
+        const afTag = document.createElement("span");
+        afTag.className = "pill";
+        const pos = item.afPosition || "";
+        if (pos === "America First") {
+          afTag.classList.add("bill-tag-af");
+        } else if (pos === "Neither") {
+          afTag.classList.add("bill-tag-neutral");
+        } else if (pos === "Anti-America First") {
+          afTag.classList.add("bill-tag-anti");
+        }
+        afTag.textContent = pos || "Unclassified";
+        tags.appendChild(afTag);
+
+        // vote tag
+        const voteTag = document.createElement("span");
+        voteTag.className = "pill";
+        if (item.vote === "Approved") {
+          voteTag.classList.add("vote-tag-yes");
+          voteTag.textContent = "Member vote: Approved";
+        } else if (item.vote === "Opposed") {
+          voteTag.classList.add("vote-tag-no");
+          voteTag.textContent = "Member vote: Opposed";
+        } else if (item.vote === "Abstained") {
+          voteTag.classList.add("vote-tag-abstain");
+          voteTag.textContent = "Member vote: Abstained";
+        } else {
+          voteTag.textContent = "Member vote: Not recorded";
+        }
+        tags.appendChild(voteTag);
+
+        li.appendChild(tags);
+
+        if (item.description) {
+          const desc = document.createElement("div");
+          desc.className = "vote-desc";
+          desc.textContent = item.description;
+          li.appendChild(desc);
+        }
+
+        if (item.govLink) {
+          const linkDiv = document.createElement("div");
+          linkDiv.className = "vote-link";
+          const a = document.createElement("a");
+          a.href = item.govLink;
+          a.target = "_blank";
+          a.rel = "noopener noreferrer";
+          a.textContent = "View bill details";
+          linkDiv.appendChild(a);
+          li.appendChild(linkDiv);
+        }
+
+        list.appendChild(li);
+      });
+    }
+
+    async function loadAvailableBills() {
+      if (!member || !isAdmin) return;
+      const chamber = member.chamber || "";
+      const url =
+        chamber && (chamber === "House" || chamber === "Senate")
+          ? API_BASE + "/api/bills?chamber=" + encodeURIComponent(chamber)
+          : API_BASE + "/api/bills";
+
+      const res = await fetch(url);
+      if (!res.ok) {
+        console.error("Error loading bills:", res.status);
+        return;
+      }
+      availableBills = await res.json();
+      renderBillSelect();
+    }
+
+    function renderBillSelect() {
+      const select = document.getElementById("billSelect");
+      select.innerHTML = "";
+
+      if (!availableBills.length) {
+        const opt = document.createElement("option");
+        opt.value = "";
+        opt.textContent = "No bills available yet";
+        select.appendChild(opt);
+        select.disabled = true;
+        return;
+      }
+
+      select.disabled = false;
+      availableBills.forEach((b) => {
+        const opt = document.createElement("option");
+        opt.value = b.id;
+        const datePart = b.billDate
+          ? new Date(b.billDate).toLocaleDateString()
+          : "No date";
+        opt.textContent = `${datePart} – ${b.title}`;
+        select.appendChild(opt);
+      });
+    }
+
+    function updateAdminUI() {
+      const adminSection = document.getElementById("adminBillsSection");
+      adminSection.style.display = isAdmin ? "block" : "none";
+
+      // Prefill bill chamber with member's chamber if available
+      if (member && member.chamber) {
+        const billChamber = document.getElementById("billChamber");
+        if (member.chamber === "House" || member.chamber === "Senate") {
+          billChamber.value = member.chamber;
+        }
+      }
+    }
+
+    // Admin forms
+    async function handleAddBill(e) {
+      e.preventDefault();
+      if (!isAdmin || !token) return;
+
+      const title = document.getElementById("billTitle").value.trim();
+      const chamber = document.getElementById("billChamber").value || null;
+      const afPosition = document.getElementById("billAFPosition").value || null;
+      const billDate = document.getElementById("billDate").value || null;
+      const govLink = document.getElementById("billGovLink").value.trim() || null;
+      const description = document.getElementById("billDescription").value.trim() || null;
+
+      if (!title) {
+        alert("Bill title is required.");
+        return;
+      }
+
+      try {
+        const res = await fetch(API_BASE + "/api/bills", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ password })
+          headers: authHeaders({ "Content-Type": "application/json" }),
+          body: JSON.stringify({
+            title,
+            chamber,
+            afPosition,
+            billDate,
+            description,
+            govLink,
+          }),
         });
 
-        if (!res.ok) {
-          adminError.textContent = "Incorrect password.";
+        if (res.status === 401) {
+          alert("Admin session expired. Please log in again on the main page.");
           return;
         }
 
-        const data = await res.json();
-        token = data.token;
-        localStorage.setItem("afToken", token);
-        isAdmin = true;
-        adminLoginPanel.classList.remove("active");
-        adminError.textContent = "";
-        updateAdminUI();
-        await loadMembers();
+        if (!res.ok) {
+          alert("Error adding bill.");
+          return;
+        }
+
+        // Clear form, reload bills
+        document.getElementById("addBillForm").reset();
+        await loadAvailableBills();
       } catch (err) {
-        adminError.textContent = "Login error. Try again.";
+        console.error("Error adding bill:", err);
+        alert("Error adding bill.");
       }
-    });
+    }
+
+    async function handleAttachBill(e) {
+      e.preventDefault();
+      if (!isAdmin || !token) return;
+
+      const billId = document.getElementById("billSelect").value;
+      const vote = document.getElementById("voteSelect").value;
+
+      if (!billId) {
+        alert("Select a bill first.");
+        return;
+      }
+
+      try {
+        const res = await fetch(
+          API_BASE + "/api/members/" + encodeURIComponent(memberId) + "/bills",
+          {
+            method: "POST",
+            headers: authHeaders({ "Content-Type": "application/json" }),
+            body: JSON.stringify({ billId, vote }),
+          }
+        );
+
+        if (res.status === 401) {
+          alert("Admin session expired. Please log in again on the main page.");
+          return;
+        }
+
+        if (!res.ok) {
+          alert("Error attaching bill to member.");
+          return;
+        }
+
+        await loadMemberVotes();
+      } catch (err) {
+        console.error("Error attaching bill:", err);
+        alert("Error attaching bill.");
+      }
+    }
 
     // init
     (async function init() {
+      // If we already have a token (from main page login), treat as admin here too.
       if (token) {
-        isAdmin = true; // optimistic
+        isAdmin = true;
       }
-      updateAdminUI();
-      await loadMembers();
+      document
+        .getElementById("addBillForm")
+        .addEventListener("submit", handleAddBill);
+      document
+        .getElementById("attachBillForm")
+        .addEventListener("submit", handleAttachBill);
+
+      await loadMember();
     })();
   </script>
 </body>
