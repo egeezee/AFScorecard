@@ -558,3 +558,177 @@
         headers: authHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({})
       });
+
+      if (res.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+
+      const member = await res.json();
+      members.unshift(member);
+      renderTable();
+    }
+
+    async function updateMember(id, updates) {
+      if (!isAdmin || !token) return;
+      const res = await fetch(API_BASE + "/api/members/" + id, {
+        method: "PUT",
+        headers: authHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify(updates)
+      });
+
+      if (res.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+
+      const updated = await res.json();
+      const idx = members.findIndex((m) => m.id === id);
+      if (idx !== -1) {
+        members[idx] = updated;
+        renderTable();
+      }
+    }
+
+    async function deleteMember(id) {
+      if (!isAdmin || !token) return;
+      const res = await fetch(API_BASE + "/api/members/" + id, {
+        method: "DELETE",
+        headers: authHeaders()
+      });
+
+      if (res.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+
+      members = members.filter((m) => m.id !== id);
+      renderTable();
+    }
+
+    function handleUnauthorized() {
+      // token probably expired / server restarted
+      token = null;
+      localStorage.removeItem("afToken");
+      isAdmin = false;
+      updateAdminUI();
+      alert("Your admin session expired. Please log in again.");
+    }
+
+    // table events
+    tbody.addEventListener("input", (e) => {
+      if (!isAdmin) return;
+      const target = e.target;
+      const row = target.closest("tr");
+      if (!row) return;
+      const id = row.dataset.id;
+      const field = target.name;
+      let value = target.value;
+
+      if (field === "lifetimeScore" || field === "currentScore") {
+        value = value === "" ? null : parseFloat(value);
+      }
+
+      updateMember(id, { [field]: value });
+    });
+
+    tbody.addEventListener("change", (e) => {
+      if (!isAdmin) return;
+      const input = e.target;
+      if (input.type === "file" && input.name === "photo") {
+        const row = input.closest("tr");
+        const id = row.dataset.id;
+        const file = input.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function (ev) {
+          const dataUrl = ev.target.result;
+          updateMember(id, { imageData: dataUrl });
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+
+    tbody.addEventListener("click", (e) => {
+      if (!isAdmin) return;
+      const btn = e.target.closest(".remove-btn");
+      if (!btn) return;
+      const row = btn.closest("tr");
+      const id = row.dataset.id;
+      deleteMember(id);
+    });
+
+    addMemberBtn.addEventListener("click", addMember);
+    searchInput.addEventListener("input", renderTable);
+    chamberFilter.addEventListener("change", renderTable);
+
+    // admin login
+    adminToggleBtn.addEventListener("click", () => {
+      if (isAdmin) {
+        token = null;
+        isAdmin = false;
+        localStorage.removeItem("afToken");
+        updateAdminUI();
+        renderTable();
+      } else {
+        adminError.textContent = "";
+        adminPasswordInput.value = "";
+        adminLoginPanel.classList.add("active");
+        setTimeout(() => adminPasswordInput.focus(), 50);
+      }
+    });
+
+    adminCancelBtn.addEventListener("click", () => {
+      adminLoginPanel.classList.remove("active");
+      adminError.textContent = "";
+    });
+
+    adminLoginPanel.addEventListener("click", (e) => {
+      if (e.target === adminLoginPanel) {
+        adminLoginPanel.classList.remove("active");
+        adminError.textContent = "";
+      }
+    });
+
+    adminLoginForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const password = adminPasswordInput.value || "";
+      adminError.textContent = "";
+      try {
+        const res = await fetch(API_BASE + "/api/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ password })
+        });
+
+        if (!res.ok) {
+          adminError.textContent = "Incorrect password.";
+          return;
+        }
+
+        const data = await res.json();
+        token = data.token;
+        localStorage.setItem("afToken", token);
+        isAdmin = true;
+        adminLoginPanel.classList.remove("active");
+        adminError.textContent = "";
+        updateAdminUI();
+        await loadMembers();
+      } catch (err) {
+        adminError.textContent = "Login error. Try again.";
+      }
+    });
+
+    // init
+    (async function init() {
+      if (token) {
+        // optimistically treat as admin until API says otherwise
+        isAdmin = true;
+      }
+      updateAdminUI();
+      await loadMembers();
+    })();
+  </script>
+</body>
+</html>
