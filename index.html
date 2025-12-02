@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>America First Scorecard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    :root {
+      --blue: #002b5c;
+      --red: #c8102e;
+      --white: #ffffff;
+      --card-bg: #0a2344;
+      --border-color: #2f4770;
+      --text-light: #f5f7fb;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+        sans-serif;
+    }
+
+    body {
+      background: var(--blue);
+      color: var(--text-light);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      text-align: center;
+      padding: 1.5rem 1rem 0.5rem;
+      border-bottom: 2px solid var(--border-color);
+      background: linear-gradient(
+        to bottom,
+        #001632 0%,
+        #001b3b 40%,
+        var(--blue) 100%
+      );
+    }
+
+    header img {
+      max-width: 260px;
+      width: 40vw;
+      height: auto;
+      display: block;
+      margin: 0 auto 0.75rem;
+    }
+
+    header h1 {
+      font-size: clamp(1.8rem, 3vw, 2.4rem);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--white);
+    }
+
+    main {
+      max-width: 1100px;
+      width: 100%;
+      margin: 1.5rem auto 2rem;
+      padding: 0 1rem 2rem;
+      flex: 1;
+    }
+
+    .card {
+      background: var(--card-bg);
+      border-radius: 16px;
+      border: 1px solid var(--border-color);
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+      padding: 1.5rem;
+    }
+
+    .card-header {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+    }
+
+    .card-header h2 {
+      font-size: 1.25rem;
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    button,
+    select,
+    input[type="search"] {
+      border-radius: 999px;
+      border: 1px solid var(--border-color);
+      padding: 0.4rem 0.8rem;
+      background: #04142d;
+      color: var(--text-light);
+      font-size: 0.9rem;
+    }
+
+    button {
+      cursor: pointer;
+      background: var(--red);
+      border-color: #ff4a63;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    button:hover {
+      filter: brightness(1.08);
+    }
+
+    input[type="search"] {
+      min-width: 180px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 0.5rem;
+      font-size: 0.92rem;
+    }
+
+    thead {
+      background: #04142d;
+    }
+
+    th,
+    td {
+      padding: 0.55rem 0.5rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      text-align: left;
+      white-space: nowrap;
+    }
+
+    th {
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #c9d3e8;
+    }
+
+    tbody tr:nth-child(even) {
+      background: rgba(255, 255, 255, 0.01);
+    }
+
+    tbody tr:hover {
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    td input,
+    td select {
+      width: 100%;
+      padding: 0.3rem 0.4rem;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      background: rgba(3, 18, 40, 0.8);
+      color: var(--text-light);
+      font-size: 0.9rem;
+    }
+
+    td input[type="number"] {
+      text-align: right;
+    }
+
+    td .remove-btn {
+      background: transparent;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      padding: 0.25rem 0.5rem;
+      font-size: 0.8rem;
+      text-transform: none;
+      letter-spacing: 0;
+    }
+
+    .footnote {
+      margin-top: 0.75rem;
+      font-size: 0.8rem;
+      color: #c0c8da;
+      opacity: 0.9;
+    }
+
+    @media (max-width: 720px) {
+      th:nth-child(3),
+      td:nth-child(3),
+      th:nth-child(4),
+      td:nth-child(4) {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <!-- Replace "af-logo.png" with the path/filename of YOUR logo/banner -->
+    <img src="af-logo.png" alt="America First Logo" />
+    <h1>America First Scorecard</h1>
+  </header>
+
+  <main>
+    <section class="card">
+      <div class="card-header">
+        <h2>Member Scorecards</h2>
+        <div class="controls">
+          <input
+            type="search"
+            id="searchInput"
+            placeholder="Search by name, state, or party..."
+          />
+          <select id="chamberFilter">
+            <option value="all">All Chambers</option>
+            <option value="House">House</option>
+            <option value="Senate">Senate</option>
+          </select>
+          <button id="addMemberBtn">Add Member</button>
+        </div>
+      </div>
+
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Chamber</th>
+              <th>State</th>
+              <th>Party</th>
+              <th>Lifetime Score (%)</th>
+              <th>Current Congress (%)</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="memberTableBody"></tbody>
+        </table>
+      </div>
+
+      <p class="footnote">
+        Scores are editable. Changes are saved locally in your browser so you
+        can manually maintain and adjust each member’s America First alignment.
+      </p>
+    </section>
+  </main>
+
+  <script>
+    // ---------- DATA & STORAGE ----------
+    const STORAGE_KEY = "afScorecardMembers_v1";
+
+    const defaultMembers = [
+      {
+        id: crypto.randomUUID(),
+        name: "Sample Senator",
+        chamber: "Senate",
+        state: "TX",
+        party: "R",
+        lifetimeScore: 92,
+        currentScore: 95,
+      },
+      {
+        id: crypto.randomUUID(),
+        name: "Sample Representative",
+        chamber: "House",
+        state: "FL",
+        party: "R",
+        lifetimeScore: 88,
+        currentScore: 90,
+      },
+    ];
+
+    function loadMembers() {
+      try {
+        const data = JSON.parse(localStorage.getItem(STORAGE_KEY));
+        if (Array.isArray(data) && data.length > 0) return data;
+      } catch (e) {
+        console.warn("Could not read saved data:", e);
+      }
+      return defaultMembers;
+    }
+
+    function saveMembers(members) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(members));
+    }
+
+    let members = loadMembers();
+
+    // ---------- RENDER ----------
+    const tbody = document.getElementById("memberTableBody");
+    const searchInput = document.getElementById("searchInput");
+    const chamberFilter = document.getElementById("chamberFilter");
+    const addMemberBtn = document.getElementById("addMemberBtn");
+
+    function renderTable() {
+      const searchTerm = searchInput.value.trim().toLowerCase();
+      const chamberValue = chamberFilter.value;
+
+      tbody.innerHTML = "";
+
+      members
+        .filter((m) => {
+          const chamberMatch =
+            chamberValue === "all" || m.chamber === chamberValue;
+
+          const text =
+            `${m.name} ${m.state} ${m.party}`.toLowerCase();
+          const searchMatch = text.includes(searchTerm);
+
+          return chamberMatch && searchMatch;
+        })
+        .forEach((member) => {
+          const tr = document.createElement("tr");
+          tr.dataset.id = member.id;
+
+          tr.innerHTML = `
+            <td>
+              <input type="text" name="name" value="${member.name}" />
+            </td>
+            <td>
+              <select name="chamber">
+                <option value="House" ${
+                  member.chamber === "House" ? "selected" : ""
+                }>House</option>
+                <option value="Senate" ${
+                  member.chamber === "Senate" ? "selected" : ""
+                }>Senate</option>
+              </select>
+            </td>
+            <td>
+              <input type="text" name="state" maxlength="2" value="${
+                member.state
+              }" />
+            </td>
+            <td>
+              <input type="text" name="party" maxlength="3" value="${
+                member.party
+              }" />
+            </td>
+            <td>
+              <input type="number" name="lifetimeScore" min="0" max="100" step="0.1" value="${
+                member.lifetimeScore
+              }" />
+            </td>
+            <td>
+              <input type="number" name="currentScore" min="0" max="100" step="0.1" value="${
+                member.currentScore
+              }" />
+            </td>
+            <td>
+              <button class="remove-btn" type="button">Remove</button>
+            </td>
+          `;
+
+          tbody.appendChild(tr);
+        });
+    }
+
+    renderTable();
+
+    // ---------- EVENTS ----------
+    // Save edits on input change
+    tbody.addEventListener("input", (e) => {
+      const target = e.target;
+      const row = target.closest("tr");
+      if (!row) return;
+
+      const id = row.dataset.id;
+      const member = members.find((m) => m.id === id);
+      if (!member) return;
+
+      const field = target.name;
+      let value = target.value;
+
+      if (field === "lifetimeScore" || field === "currentScore") {
+        value = value === "" ? "" : parseFloat(value);
+      }
+
+      member[field] = value;
+      saveMembers(members);
+    });
+
+    // Remove member
+    tbody.addEventListener("click", (e) => {
+      const btn = e.target.closest(".remove-btn");
+      if (!btn) return;
+
+      const row = btn.closest("tr");
+      const id = row.dataset.id;
+
+      members = members.filter((m) => m.id !== id);
+      saveMembers(members);
+      renderTable();
+    });
+
+    // Add member
+    addMemberBtn.addEventListener("click", () => {
+      const newMember = {
+        id: crypto.randomUUID(),
+        name: "New Member",
+        chamber: "House",
+        state: "",
+        party: "",
+        lifetimeScore: 0,
+        currentScore: 0,
+      };
+      members.unshift(newMember);
+      saveMembers(members);
+      renderTable();
+    });
+
+    // Search & filter
+    searchInput.addEventListener("input", renderTable);
+    chamberFilter.addEventListener("change", renderTable);
+  </script>
+</body>
+</html>
