@@ -49,6 +49,7 @@ function requireAdmin(req, res, next) {
 
 // --- DB bootstrap ---
 async function initDb() {
+  // politicians table
   await pool.query(`
     CREATE TABLE IF NOT EXISTS politicians (
       id UUID PRIMARY KEY,
@@ -64,7 +65,32 @@ async function initDb() {
     );
   `);
 
-  // If table is empty, seed with a couple of examples
+  // global bills table
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS bills (
+      id UUID PRIMARY KEY,
+      title TEXT NOT NULL,
+      chamber TEXT,               -- "House", "Senate", or NULL/"Both"
+      af_position TEXT,           -- "America First", "Neither", "Anti-America First"
+      bill_date DATE,
+      description TEXT,
+      gov_link TEXT
+    );
+  `);
+
+  // member_votes links a politician to a bill with their vote
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS member_votes (
+      id UUID PRIMARY KEY,
+      member_id UUID REFERENCES politicians(id) ON DELETE CASCADE,
+      bill_id UUID REFERENCES bills(id) ON DELETE CASCADE,
+      vote TEXT,                  -- "Approved", "Opposed", "Abstained"
+      created_at TIMESTAMPTZ DEFAULT now(),
+      CONSTRAINT member_votes_unique UNIQUE (member_id, bill_id)
+    );
+  `);
+
+  // Seed politicians the first time
   const { rows } = await pool.query("SELECT COUNT(*) AS count FROM politicians");
   const count = parseInt(rows[0].count, 10);
   if (count === 0) {
@@ -83,6 +109,7 @@ async function initDb() {
     console.log("Seeded initial politicians.");
   }
 }
+
 
 // --- routes ---
 
@@ -383,3 +410,155 @@ app.get("/api/members/:id", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+
+// list bills (public, optional ?chamber=House/Senate)
+app.get("/api/bills", async (req, res) => {
+  const { chamber } = req.query;
+  try {
+    let result;
+    if (chamber) {
+      result = await pool.query(
+        `
+        SELECT
+          id,
+          title,
+          chamber,
+          af_position AS "afPosition",
+          bill_date AS "billDate",
+          description,
+          gov_link AS "govLink"
+        FROM bills
+        WHERE chamber = $1 OR chamber IS NULL
+        ORDER BY bill_date DESC NULLS LAST, title ASC;
+      `,
+        [chamber]
+      );
+    } else {
+      result = await pool.query(
+        `
+        SELECT
+          id,
+          title,
+          chamber,
+          af_position AS "afPosition",
+          bill_date AS "billDate",
+          description,
+          gov_link AS "govLink"
+        FROM bills
+        ORDER BY bill_date DESC NULLS LAST, title ASC;
+      `
+      );
+    }
+    res.json(result.rows);
+  } catch (err) {
+    console.error("Error fetching bills:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// create a new bill (admin)
+app.post("/api/bills", requireAdmin, async (req, res) => {
+  try {
+    const {
+      title,
+      chamber = null, // "House", "Senate", or null
+      afPosition = null, // "America First", "Neither", "Anti-America First"
+      billDate = null, // string like "2024-06-15"
+      description = null,
+      govLink = null,
+    } = req.body || {};
+
+    if (!title) {
+      return res.status(400).json({ error: "Title is required" });
+    }
+
+    const id = crypto.randomUUID();
+    const insertResult = await pool.query(
+      `
+      INSERT INTO bills
+        (id, title, chamber, af_position, bill_date, description, gov_link)
+      VALUES
+        ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING
+        id,
+        title,
+        chamber,
+        af_position AS "afPosition",
+        bill_date AS "billDate",
+        description,
+        gov_link AS "govLink";
+    `,
+      [id, title, chamber, afPosition, billDate, description, govLink]
+    );
+
+    res.status(201).json(insertResult.rows[0]);
+  } catch (err) {
+    console.error("Error creating bill:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// get a member's bills + votes (public)
+app.get("/api/members/:id/bills", async (req, res) => {
+  const { id } = req.params;
+  try {
+    const result = await pool.query(
+      `
+      SELECT
+        b.id AS "billId",
+        b.title,
+        b.chamber,
+        b.af_position AS "afPosition",
+        b.bill_date AS "billDate",
+        b.description,
+        b.gov_link AS "govLink",
+        mv.id AS "voteId",
+        mv.vote,
+        mv.created_at AS "createdAt"
+      FROM member_votes mv
+      JOIN bills b ON mv.bill_id = b.id
+      WHERE mv.member_id = $1
+      ORDER BY b.bill_date DESC NULLS LAST, mv.created_at DESC;
+    `,
+      [id]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error("Error fetching member bills:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// create/update a vote for a member on a bill (admin)
+app.post("/api/members/:id/bills", requireAdmin, async (req, res) => {
+  const { id: memberId } = req.params;
+  const { billId, vote } = req.body || {};
+
+  if (!billId || !vote) {
+    return res.status(400).json({ error: "billId and vote are required" });
+  }
+
+  try {
+    const result = await pool.query(
+      `
+      INSERT INTO member_votes (id, member_id, bill_id, vote)
+      VALUES ($1, $2, $3, $4)
+      ON CONFLICT (member_id, bill_id)
+      DO UPDATE SET vote = EXCLUDED.vote, created_at = now()
+      RETURNING
+        id AS "voteId",
+        member_id AS "memberId",
+        bill_id AS "billId",
+        vote,
+        created_at AS "createdAt";
+    `,
+      [crypto.randomUUID(), memberId, billId, vote]
+    );
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error("Error setting member vote:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
