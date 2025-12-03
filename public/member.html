@@ -354,6 +354,86 @@
       background: rgba(77, 63, 12, 0.7);
     }
 
+    .vote-admin-controls {
+      margin-top: 0.35rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.3rem;
+      align-items: center;
+      font-size: 0.8rem;
+      opacity: 0.95;
+    }
+
+    .vote-admin-controls label {
+      margin-right: 0.1rem;
+    }
+
+    .vote-admin-select {
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      background: rgba(4, 20, 45, 0.9);
+      color: var(--text-light);
+      padding: 0.2rem 0.5rem;
+      font-size: 0.8rem;
+    }
+
+    .vote-admin-controls button {
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      background: rgba(4, 20, 45, 0.9);
+      color: var(--text-light);
+      padding: 0.2rem 0.6rem;
+      font-size: 0.78rem;
+      cursor: pointer;
+      text-transform: none;
+      letter-spacing: 0;
+    }
+
+    .vote-admin-controls button.save-btn {
+      border-color: #46ff9a;
+    }
+
+    .vote-admin-controls button.remove-btn {
+      border-color: #ff6b81;
+    }
+
+    .vote-admin-controls button.edit-bill-btn {
+      border-color: #ffd966;
+    }
+
+    .votes-pagination {
+      margin-top: 0.6rem;
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      gap: 0.4rem;
+      flex-wrap: wrap;
+      font-size: 0.8rem;
+    }
+
+    .votes-pagination button {
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      background: #04142d;
+      color: var(--text-light);
+      padding: 0.2rem 0.5rem;
+      font-size: 0.78rem;
+      cursor: pointer;
+      text-transform: none;
+      letter-spacing: 0;
+    }
+
+    .votes-pagination button.current {
+      background: var(--red);
+      border-color: #ff4a63;
+      font-weight: 600;
+    }
+
+    .votes-pagination button:disabled {
+      opacity: 0.5;
+      cursor: default;
+    }
+
     .footnote {
       margin-top: 1.2rem;
       font-size: 0.8rem;
@@ -434,6 +514,23 @@
       filter: brightness(1.08);
     }
 
+    .admin-inline-buttons {
+      margin-top: 0.4rem;
+      display: flex;
+      gap: 0.4rem;
+      flex-wrap: wrap;
+    }
+
+    .admin-bills-section .secondary-btn {
+      background: transparent;
+      border-color: rgba(255, 255, 255, 0.3);
+    }
+
+    .admin-bills-section .danger-btn {
+      background: #5a0b16;
+      border-color: #ff6b81;
+    }
+
     @media (max-width: 640px) {
       .member-header {
         align-items: flex-start;
@@ -500,17 +597,18 @@
         <div class="votes-section">
           <h3>Voting Record</h3>
           <ul class="votes-list" id="votesList"></ul>
+          <div class="votes-pagination" id="votesPagination"></div>
         </div>
 
-        <!-- Admin-only tools: add bills + attach vote -->
+        <!-- Admin-only tools: add/edit bills + attach vote -->
         <div class="admin-bills-section" id="adminBillsSection" style="display:none;">
           <h3>Admin – Manage Bills & Votes</h3>
           <div class="admin-bills-grid">
-            <!-- Add bill -->
+            <!-- Add / Edit bill -->
             <div>
               <p style="margin-bottom:0.4rem;font-size:0.85rem;opacity:0.9;">
-                Add a new bill to the global list. Once added, you can attach it to this member
-                (and others) with their vote.
+                Add a new bill to the global list, or edit an existing one (title, classification,
+                date, description, gov link). Deleting a bill here removes it from all members.
               </p>
               <form id="addBillForm">
                 <label for="billTitle">Bill title</label>
@@ -539,7 +637,15 @@
                 <label for="billDescription">Description</label>
                 <textarea id="billDescription" name="description"></textarea>
 
-                <button type="submit">Add Bill</button>
+                <div class="admin-inline-buttons">
+                  <button type="submit" id="billSubmitBtn">Add Bill</button>
+                  <button type="button" id="billDeleteBtn" class="danger-btn" style="display:none;">
+                    Delete Bill Globally
+                  </button>
+                  <button type="button" id="billCancelEditBtn" class="secondary-btn" style="display:none;">
+                    Cancel Edit
+                  </button>
+                </div>
               </form>
             </div>
 
@@ -547,7 +653,7 @@
             <div>
               <p style="margin-bottom:0.4rem;font-size:0.85rem;opacity:0.9;">
                 Attach an existing bill to this member and record whether they
-                approved or opposed it.
+                approved or opposed it. This only affects this member’s record.
               </p>
               <form id="attachBillForm">
                 <label for="billSelect">Select bill</label>
@@ -584,6 +690,9 @@
     let token = localStorage.getItem("afToken") || null;
     let memberVotes = [];
     let availableBills = [];
+    let votesPage = 1;
+    const votesPageSize = 5;
+    let editingBillId = null;
 
     function authHeaders(extra = {}) {
       const headers = { ...extra };
@@ -701,7 +810,7 @@
         memberTags.appendChild(tagTrending);
       }
 
-      // scores
+      // scores (still using stored values for now, but read-only)
       lifetimeScore.textContent =
         member.lifetimeScore !== null && member.lifetimeScore !== undefined
           ? `${member.lifetimeScore.toFixed
@@ -747,12 +856,15 @@
         return;
       }
       memberVotes = await res.json();
+      votesPage = 1;
       renderVotes();
     }
 
     function renderVotes() {
       const list = document.getElementById("votesList");
+      const pagination = document.getElementById("votesPagination");
       list.innerHTML = "";
+      pagination.innerHTML = "";
 
       if (!memberVotes.length) {
         const li = document.createElement("li");
@@ -762,9 +874,64 @@
         return;
       }
 
-      memberVotes.forEach((item) => {
+      const total = memberVotes.length;
+      const pageCount = Math.max(1, Math.ceil(total / votesPageSize));
+      if (votesPage > pageCount) votesPage = pageCount;
+
+      const startIndex = (votesPage - 1) * votesPageSize;
+      const endIndex = Math.min(startIndex + votesPageSize, total);
+      const slice = memberVotes.slice(startIndex, endIndex);
+
+      // pagination controls
+      const infoSpan = document.createElement("span");
+      infoSpan.textContent = `Showing ${startIndex + 1}-${endIndex} of ${total}`;
+      pagination.appendChild(infoSpan);
+
+      const controls = document.createElement("div");
+      controls.style.display = "flex";
+      controls.style.gap = "0.3rem";
+      controls.style.alignItems = "center";
+
+      const prevBtn = document.createElement("button");
+      prevBtn.textContent = "Prev";
+      prevBtn.disabled = votesPage === 1;
+      prevBtn.onclick = () => {
+        if (votesPage > 1) {
+          votesPage--;
+          renderVotes();
+        }
+      };
+      controls.appendChild(prevBtn);
+
+      for (let p = 1; p <= pageCount; p++) {
+        const btn = document.createElement("button");
+        btn.textContent = p;
+        if (p === votesPage) btn.classList.add("current");
+        btn.onclick = () => {
+          votesPage = p;
+          renderVotes();
+        };
+        controls.appendChild(btn);
+      }
+
+      const nextBtn = document.createElement("button");
+      nextBtn.textContent = "Next";
+      nextBtn.disabled = votesPage === pageCount;
+      nextBtn.onclick = () => {
+        if (votesPage < pageCount) {
+          votesPage++;
+          renderVotes();
+        }
+      };
+      controls.appendChild(nextBtn);
+
+      pagination.appendChild(controls);
+
+      // votes list
+      slice.forEach((item) => {
         const li = document.createElement("li");
         li.className = "vote-item";
+        li.dataset.billId = item.billId;
 
         const header = document.createElement("div");
         header.className = "vote-header";
@@ -788,7 +955,6 @@
         const tags = document.createElement("div");
         tags.className = "vote-tags";
 
-        // AF classification tag
         const afTag = document.createElement("span");
         afTag.className = "pill";
         const pos = item.afPosition || "";
@@ -802,7 +968,6 @@
         afTag.textContent = pos || "Unclassified";
         tags.appendChild(afTag);
 
-        // vote tag
         const voteTag = document.createElement("span");
         voteTag.className = "pill";
         if (item.vote === "Approved") {
@@ -838,6 +1003,53 @@
           a.textContent = "View bill details";
           linkDiv.appendChild(a);
           li.appendChild(linkDiv);
+        }
+
+        if (isAdmin) {
+          const adminDiv = document.createElement("div");
+          adminDiv.className = "vote-admin-controls";
+
+          const label = document.createElement("label");
+          label.textContent = "This member's vote:";
+          adminDiv.appendChild(label);
+
+          const select = document.createElement("select");
+          select.className = "vote-admin-select";
+          select.dataset.billId = item.billId;
+          ["Approved", "Opposed", "Abstained"].forEach((optVal) => {
+            const opt = document.createElement("option");
+            opt.value = optVal;
+            opt.textContent = optVal;
+            select.appendChild(opt);
+          });
+          select.value = item.vote || "Approved";
+          adminDiv.appendChild(select);
+
+          const saveBtn = document.createElement("button");
+          saveBtn.type = "button";
+          saveBtn.dataset.action = "save-vote";
+          saveBtn.dataset.billId = item.billId;
+          saveBtn.classList.add("save-btn");
+          saveBtn.textContent = "Save vote";
+          adminDiv.appendChild(saveBtn);
+
+          const removeBtn = document.createElement("button");
+          removeBtn.type = "button";
+          removeBtn.dataset.action = "remove-vote";
+          removeBtn.dataset.billId = item.billId;
+          removeBtn.classList.add("remove-btn");
+          removeBtn.textContent = "Remove from this member";
+          adminDiv.appendChild(removeBtn);
+
+          const editBillBtn = document.createElement("button");
+          editBillBtn.type = "button";
+          editBillBtn.dataset.action = "edit-bill";
+          editBillBtn.dataset.billId = item.billId;
+          editBillBtn.classList.add("edit-bill-btn");
+          editBillBtn.textContent = "Edit bill globally";
+          adminDiv.appendChild(editBillBtn);
+
+          li.appendChild(adminDiv);
         }
 
         list.appendChild(li);
@@ -890,7 +1102,56 @@
       const adminSection = document.getElementById("adminBillsSection");
       adminSection.style.display = isAdmin ? "block" : "none";
 
-      // Prefill bill chamber with member's chamber if available
+      if (member && member.chamber) {
+        const billChamber = document.getElementById("billChamber");
+        if (member.chamber === "House" || member.chamber === "Senate") {
+          billChamber.value = member.chamber;
+        }
+      }
+      updateBillFormMode();
+    }
+
+    function updateBillFormMode() {
+      const submitBtn = document.getElementById("billSubmitBtn");
+      const deleteBtn = document.getElementById("billDeleteBtn");
+      const cancelBtn = document.getElementById("billCancelEditBtn");
+
+      if (editingBillId) {
+        submitBtn.textContent = "Save Bill Changes";
+        deleteBtn.style.display = "inline-block";
+        cancelBtn.style.display = "inline-block";
+      } else {
+        submitBtn.textContent = "Add Bill";
+        deleteBtn.style.display = "none";
+        cancelBtn.style.display = "none";
+      }
+    }
+
+    function startEditingBill(billId) {
+      if (!isAdmin) return;
+      const bill = availableBills.find((b) => b.id === billId);
+      if (!bill) {
+        alert("Bill not found in available list. Try refreshing.");
+        return;
+      }
+      editingBillId = billId;
+
+      document.getElementById("billTitle").value = bill.title || "";
+      document.getElementById("billChamber").value = bill.chamber || "";
+      document.getElementById("billAFPosition").value = bill.afPosition || "America First";
+      document.getElementById("billDate").value = bill.billDate
+        ? new Date(bill.billDate).toISOString().slice(0, 10)
+        : "";
+      document.getElementById("billGovLink").value = bill.govLink || "";
+      document.getElementById("billDescription").value = bill.description || "";
+
+      updateBillFormMode();
+    }
+
+    function clearBillEditMode() {
+      editingBillId = null;
+      document.getElementById("addBillForm").reset();
+      updateBillFormMode();
       if (member && member.chamber) {
         const billChamber = document.getElementById("billChamber");
         if (member.chamber === "House" || member.chamber === "Senate") {
@@ -899,8 +1160,7 @@
       }
     }
 
-    // Admin forms
-    async function handleAddBill(e) {
+    async function handleBillFormSubmit(e) {
       e.preventDefault();
       if (!isAdmin || !token) return;
 
@@ -917,18 +1177,36 @@
       }
 
       try {
-        const res = await fetch(API_BASE + "/api/bills", {
-          method: "POST",
-          headers: authHeaders({ "Content-Type": "application/json" }),
-          body: JSON.stringify({
-            title,
-            chamber,
-            afPosition,
-            billDate,
-            description,
-            govLink,
-          }),
-        });
+        let res;
+        if (!editingBillId) {
+          // Create new
+          res = await fetch(API_BASE + "/api/bills", {
+            method: "POST",
+            headers: authHeaders({ "Content-Type": "application/json" }),
+            body: JSON.stringify({
+              title,
+              chamber,
+              afPosition,
+              billDate,
+              description,
+              govLink,
+            }),
+          });
+        } else {
+          // Update existing
+          res = await fetch(API_BASE + "/api/bills/" + encodeURIComponent(editingBillId), {
+            method: "PUT",
+            headers: authHeaders({ "Content-Type": "application/json" }),
+            body: JSON.stringify({
+              title,
+              chamber,
+              afPosition,
+              billDate,
+              description,
+              govLink,
+            }),
+          });
+        }
 
         if (res.status === 401) {
           alert("Admin session expired. Please log in again on the main page.");
@@ -936,31 +1214,55 @@
         }
 
         if (!res.ok) {
-          alert("Error adding bill.");
+          alert("Error saving bill.");
           return;
         }
 
-        // Clear form, reload bills
-        document.getElementById("addBillForm").reset();
+        clearBillEditMode();
         await loadAvailableBills();
+        await loadMemberVotes(); // reflect any global changes in the record
       } catch (err) {
-        console.error("Error adding bill:", err);
-        alert("Error adding bill.");
+        console.error("Error saving bill:", err);
+        alert("Error saving bill.");
       }
     }
 
-    async function handleAttachBill(e) {
-      e.preventDefault();
-      if (!isAdmin || !token) return;
-
-      const billId = document.getElementById("billSelect").value;
-      const vote = document.getElementById("voteSelect").value;
-
-      if (!billId) {
-        alert("Select a bill first.");
+    async function handleDeleteBill() {
+      if (!isAdmin || !token || !editingBillId) return;
+      if (!confirm("Delete this bill globally? This removes it from all members.")) {
         return;
       }
 
+      try {
+        const res = await fetch(
+          API_BASE + "/api/bills/" + encodeURIComponent(editingBillId),
+          {
+            method: "DELETE",
+            headers: authHeaders(),
+          }
+        );
+
+        if (res.status === 401) {
+          alert("Admin session expired. Please log in again on the main page.");
+          return;
+        }
+
+        if (!res.ok) {
+          alert("Error deleting bill.");
+          return;
+        }
+
+        clearBillEditMode();
+        await loadAvailableBills();
+        await loadMemberVotes();
+      } catch (err) {
+        console.error("Error deleting bill:", err);
+        alert("Error deleting bill.");
+      }
+    }
+
+    async function attachOrUpdateVote(billId, vote) {
+      if (!isAdmin || !token) return;
       try {
         const res = await fetch(
           API_BASE + "/api/members/" + encodeURIComponent(memberId) + "/bills",
@@ -977,29 +1279,109 @@
         }
 
         if (!res.ok) {
-          alert("Error attaching bill to member.");
+          alert("Error saving vote.");
           return;
         }
 
         await loadMemberVotes();
       } catch (err) {
-        console.error("Error attaching bill:", err);
-        alert("Error attaching bill.");
+        console.error("Error saving vote:", err);
+        alert("Error saving vote.");
+      }
+    }
+
+    async function deleteMemberVote(billId) {
+      if (!isAdmin || !token) return;
+      try {
+        const res = await fetch(
+          API_BASE +
+            "/api/members/" +
+            encodeURIComponent(memberId) +
+            "/bills/" +
+            encodeURIComponent(billId),
+          {
+            method: "DELETE",
+            headers: authHeaders(),
+          }
+        );
+
+        if (res.status === 401) {
+          alert("Admin session expired. Please log in again on the main page.");
+          return;
+        }
+
+        if (!res.ok) {
+          alert("Error removing vote.");
+          return;
+        }
+
+        await loadMemberVotes();
+      } catch (err) {
+        console.error("Error removing vote:", err);
+        alert("Error removing vote.");
+      }
+    }
+
+    async function handleAttachBill(e) {
+      e.preventDefault();
+      if (!isAdmin || !token) return;
+
+      const billId = document.getElementById("billSelect").value;
+      const vote = document.getElementById("voteSelect").value;
+
+      if (!billId) {
+        alert("Select a bill first.");
+        return;
+      }
+
+      await attachOrUpdateVote(billId, vote);
+    }
+
+    function handleVotesClick(e) {
+      if (!isAdmin || !token) return;
+      const btn = e.target.closest("button");
+      if (!btn) return;
+
+      const action = btn.dataset.action;
+      const billId = btn.dataset.billId;
+      if (!billId) return;
+
+      if (action === "save-vote") {
+        const select = document.querySelector(
+          '.vote-admin-select[data-bill-id="' + billId + '"]'
+        );
+        if (!select) return;
+        const vote = select.value;
+        attachOrUpdateVote(billId, vote);
+      } else if (action === "remove-vote") {
+        if (!confirm("Remove this bill from this member's record?")) return;
+        deleteMemberVote(billId);
+      } else if (action === "edit-bill") {
+        startEditingBill(billId);
       }
     }
 
     // init
     (async function init() {
-      // If we already have a token (from main page login), treat as admin here too.
       if (token) {
         isAdmin = true;
       }
+
       document
         .getElementById("addBillForm")
-        .addEventListener("submit", handleAddBill);
+        .addEventListener("submit", handleBillFormSubmit);
       document
         .getElementById("attachBillForm")
         .addEventListener("submit", handleAttachBill);
+      document
+        .getElementById("billDeleteBtn")
+        .addEventListener("click", handleDeleteBill);
+      document
+        .getElementById("billCancelEditBtn")
+        .addEventListener("click", clearBillEditMode);
+      document
+        .getElementById("votesList")
+        .addEventListener("click", handleVotesClick);
 
       await loadMember();
     })();
