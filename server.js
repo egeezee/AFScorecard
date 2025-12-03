@@ -14,7 +14,8 @@ const app = express();
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "change-me";
 const DATABASE_URL = process.env.DATABASE_URL;
 const CONGRESS_API_KEY =
-  process.env.CONGRESS_API_KEY || "NUtl5kWwSI4bWZKgjAbWxwALpFfL3gHWFPrwh0P0";
+  process.env.CONGRESS_API_KEY ||
+  "NUtl5kWwSI4bWZKgjAbWxwALpFfL3gHWFPrwh0P0"; // you can remove the fallback later
 
 if (!DATABASE_URL) {
   console.error("DATABASE_URL is not set. Please add it in Render environment.");
@@ -190,36 +191,37 @@ async function initDb() {
 //  CONGRESS.GOV SYNC
 // ===================
 
-async function fetchAllCurrentMembersFromCongressGov() {
+// Helper: fetch all current members from Congress.gov for a given Congress
+async function fetchCurrentMembersForCongress(congressNumber = 118) {
   if (!CONGRESS_API_KEY) {
     throw new Error("CONGRESS_API_KEY is missing");
   }
 
-  const baseUrl = "https://api.congress.gov/v3/member";
+  const baseUrl = `https://api.congress.gov/v3/member/congress/${congressNumber}`;
   const limit = 250;
   let offset = 0;
   let all = [];
 
-  // paginate until no more "next"
-  // MemberList returns: { members: [...], pagination: { count, next, ... } }
   while (true) {
     const url = new URL(baseUrl);
     url.searchParams.set("api_key", CONGRESS_API_KEY);
     url.searchParams.set("format", "json");
     url.searchParams.set("limit", String(limit));
     url.searchParams.set("offset", String(offset));
-    url.searchParams.set("currentMember", "true");
 
-    const res = await fetch(url);
-    if (!res.ok) {
-      const text = await res.text();
+    const resp = await fetch(url);
+    if (!resp.ok) {
+      const text = await resp.text();
       throw new Error(
-        `Congress.gov member request failed: ${res.status} – ${text.slice(0, 200)}`
+        `Congress.gov member request failed: ${resp.status} – ${text.slice(
+          0,
+          200
+        )}`
       );
     }
 
-    const data = await res.json();
-    const members = data.members || [];
+    const data = await resp.json();
+    const members = Array.isArray(data.members) ? data.members : [];
     all = all.concat(members);
 
     const pagination = data.pagination || {};
@@ -232,30 +234,65 @@ async function fetchAllCurrentMembersFromCongressGov() {
   return all;
 }
 
+// Normalize raw Congress.gov member objects into our schema
 function normalizeCongressMembers(rawMembers) {
   return rawMembers
-    .map((m) => {
+    .map((wrapper) => {
+      const m = wrapper.member || wrapper; // handles both shapes
+
       const bioguideId = m.bioguideId || null;
+
       const fullName =
         m.fullName ||
         [m.firstName, m.lastName].filter(Boolean).join(" ") ||
         null;
 
-      let chamber = m.chamber || null;
-      if (chamber === "House of Representatives") chamber = "House";
+      // Chamber and status can live in different places depending on variant
+      const chamber =
+        m.chamber ||
+        m.latestStatus?.chamber ||
+        m.terms?.[m.terms.length - 1]?.chamber ||
+        null;
 
-      let state = m.state || null;
-      if (state) state = state.toUpperCase();
+      const state =
+        m.state ||
+        m.latestStatus?.state ||
+        m.terms?.[m.terms.length - 1]?.state ||
+        null;
 
-      let party = m.party || null;
+      const partyRaw =
+        m.party ||
+        m.partyName ||
+        m.latestStatus?.party ||
+        m.terms?.[m.terms.length - 1]?.party ||
+        null;
+
+      let party = partyRaw;
       if (party) {
         const p = party.toLowerCase();
         if (p.startsWith("republican")) party = "R";
         else if (p.startsWith("democrat")) party = "D";
         else if (p.startsWith("independent")) party = "I";
+        else party = partyRaw.substring(0, 3).toUpperCase();
       }
 
-      return { bioguideId, name: fullName, chamber, state, party };
+      let chamberNorm = chamber;
+      if (chamberNorm === "House of Representatives") chamberNorm = "House";
+      if (chamberNorm) {
+        chamberNorm =
+          chamberNorm.charAt(0).toUpperCase() +
+          chamberNorm.slice(1).toLowerCase();
+      }
+
+      const stateNorm = state ? state.toUpperCase() : null;
+
+      return {
+        bioguideId,
+        name: fullName,
+        chamber: chamberNorm,
+        state: stateNorm,
+        party,
+      };
     })
     .filter(
       (m) =>
@@ -270,10 +307,19 @@ function normalizeCongressMembers(rawMembers) {
 // Admin-only endpoint to sync all current House/Senate members into politicians
 app.post("/api/admin/sync-members", requireAdmin, async (req, res) => {
   try {
-    const rawMembers = await fetchAllCurrentMembersFromCongressGov();
-    const members = normalizeCongressMembers(rawMembers);
+    const congressNumber = Number(req.body?.congress) || 118;
+
+    const rawMembers = await fetchCurrentMembersForCongress(congressNumber);
+    const normalized = normalizeCongressMembers(rawMembers);
+
+    console.log(
+      `Congress sync: fetched ${rawMembers.length} raw, ${normalized.length} usable members.`
+    );
 
     const client = await pool.connect();
+    let importedCount = 0;
+    let updatedCount = 0;
+
     try {
       await client.query("BEGIN");
 
@@ -283,7 +329,7 @@ app.post("/api/admin/sync-members", requireAdmin, async (req, res) => {
       );
       let nextPosition = Number(posRes.rows[0].maxpos) || 0;
 
-      for (const m of members) {
+      for (const m of normalized) {
         // does this bioguide already exist?
         const existing = await client.query(
           "SELECT id FROM politicians WHERE bioguide_id = $1",
@@ -291,7 +337,7 @@ app.post("/api/admin/sync-members", requireAdmin, async (req, res) => {
         );
 
         if (existing.rows.length > 0) {
-          // update basic fields only; preserve scores, image, trending, position
+          const id = existing.rows[0].id;
           await client.query(
             `
             UPDATE politicians
@@ -299,10 +345,11 @@ app.post("/api/admin/sync-members", requireAdmin, async (req, res) => {
                 chamber = $3,
                 state = $4,
                 party = $5
-            WHERE bioguide_id = $1
+            WHERE id = $1
           `,
-            [m.bioguideId, m.name, m.chamber, m.state, m.party]
+            [id, m.name, m.chamber, m.state, m.party]
           );
+          updatedCount++;
         } else {
           // insert new
           nextPosition += 1;
@@ -318,13 +365,17 @@ app.post("/api/admin/sync-members", requireAdmin, async (req, res) => {
           `,
             [id, m.bioguideId, m.name, m.chamber, m.state, m.party, nextPosition]
           );
+          importedCount++;
         }
       }
 
       await client.query("COMMIT");
       res.json({
         success: true,
-        importedCount: members.length,
+        imported: importedCount,
+        updated: updatedCount,
+        totalFromCongressApi: rawMembers.length,
+        usableMembers: normalized.length,
       });
     } catch (err) {
       await client.query("ROLLBACK");
