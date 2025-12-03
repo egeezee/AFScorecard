@@ -740,7 +740,6 @@ app.post("/api/members/:id/bills", requireAdmin, async (req, res) => {
     return res.status(400).json({ error: "billId and vote are required" });
   }
 
-  // isCurrent: boolean when provided; null means "don't change existing flag"
   let isCurrent = null;
   if (Object.prototype.hasOwnProperty.call(req.body, "isCurrent")) {
     isCurrent = !!req.body.isCurrent;
@@ -767,7 +766,6 @@ app.post("/api/members/:id/bills", requireAdmin, async (req, res) => {
       [crypto.randomUUID(), memberId, billId, vote, isCurrent]
     );
 
-    // Recompute scores after change
     await recomputeScoresForMember(memberId);
 
     res.json(result.rows[0]);
@@ -776,5 +774,6 @@ app.post("/api/members/:id/bills", requireAdmin, async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+
 
 
