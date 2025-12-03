@@ -617,10 +617,15 @@ app.put("/api/bills/:id", requireAdmin, async (req, res) => {
   `;
 
   try {
-    const result = await pool.query(query, values);
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: "Bill not found" });
-    }
+    // Recompute scores for all members who voted on this bill
+        const mRes = await pool.query(
+          `SELECT DISTINCT member_id FROM member_votes WHERE bill_id = $1`,
+          [id]
+        );
+        for (const row of mRes.rows) {
+          await recomputeScoresForMember(row.member_id);
+        }
+
     res.json(result.rows[0]);
   } catch (err) {
     console.error("Error updating bill:", err);
@@ -633,26 +638,36 @@ app.delete("/api/bills/:id", requireAdmin, async (req, res) => {
   const { id } = req.params;
   try {
     const result = await pool.query(
-      `
-      DELETE FROM bills
-      WHERE id = $1
-      RETURNING
-        id,
-        title,
-        chamber,
-        af_position AS "afPosition",
-        bill_date AS "billDate",
-        description,
-        gov_link AS "govLink";
-    `,
-      [id]
-    );
+  `
+  DELETE FROM bills
+  WHERE id = $1
+  RETURNING
+    id,
+    title,
+    chamber,
+    af_position AS "afPosition",
+    bill_date AS "billDate",
+    description,
+    gov_link AS "govLink";
+`,
+  [id]
+);
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: "Bill not found" });
-    }
+if (result.rows.length === 0) {
+  return res.status(404).json({ error: "Bill not found" });
+}
 
-    res.json(result.rows[0]);
+// All member_votes with this bill_id are removed by ON DELETE CASCADE,
+// so just recompute scores for affected members
+const mRes = await pool.query(
+  `SELECT DISTINCT member_id FROM member_votes WHERE bill_id = $1`,
+  [id]
+);
+for (const row of mRes.rows) {
+  await recomputeScoresForMember(row.member_id);
+}
+
+res.json(result.rows[0]);
   } catch (err) {
     console.error("Error deleting bill:", err);
     res.status(500).json({ error: "Server error" });
