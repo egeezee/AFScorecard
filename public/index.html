@@ -198,13 +198,12 @@
       color: #c9d3e8;
     }
 
-    /* Right-align actions column on desktop */
+    /* Actions column: consistent width & centered */
     th.actions-col,
     td.actions-col {
       text-align: center;
-      width: 120px;       /* forces a consistent column width */
+      width: 120px;
     }
-
 
     tbody tr:nth-child(even) {
       background: rgba(255, 255, 255, 0.01);
@@ -297,20 +296,18 @@
       background: rgba(4, 20, 45, 0.9);
     }
 
+    /* SIMPLE, CENTERED ACTIONS CELLS */
     .actions-cell {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.3rem;
-    justify-content: center;   /* center the View button under ACTIONS */
-    align-items: center;       /* vertical centering in the row */
-  }
-
+      text-align: center;
+      white-space: nowrap;
+    }
 
     .actions-cell button {
       font-size: 0.78rem;
       padding: 0.25rem 0.6rem;
       text-transform: none;
       letter-spacing: 0;
+      margin: 0 0.15rem;
     }
 
     .footnote {
@@ -470,8 +467,9 @@
       td {
         padding: 0.45rem 0.35rem;
       }
+      /* still centered on mobile, which is fine for View/Edit/Delete */
       .actions-cell {
-        justify-content: flex-start; /* keep mobile nice */
+        text-align: left;
       }
     }
   </style>
