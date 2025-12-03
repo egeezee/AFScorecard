@@ -10,14 +10,14 @@
       display: flex;
       align-items: center;
     }
-    
+
     .current-congress-row label {
       display: inline-flex;
       align-items: center;
       gap: 0.35rem;
       font-size: 0.85rem;
     }
-    
+
     .current-congress-row input[type="checkbox"] {
       width: 14px;
       height: 14px;
@@ -678,21 +678,21 @@
                 <select id="billSelect" name="billId">
                   <!-- options injected -->
                 </select>
-              
+
                 <label for="voteSelect">How did this member vote?</label>
                 <select id="voteSelect" name="vote">
                   <option value="Approved">Approved / Yes</option>
                   <option value="Opposed">Opposed / No</option>
                   <option value="Abstained">Abstained</option>
                 </select>
-              
+
                 <div class="current-congress-row">
                   <label>
                     <input type="checkbox" id="voteIsCurrent" />
                     <span>Count towards current Congress score</span>
                   </label>
                 </div>
-              
+
                 <button type="submit" style="margin-top:0.4rem;">Add to Scorecard</button>
               </form>
             </div>
@@ -782,7 +782,6 @@
       const currentScore = document.getElementById("currentScore");
       const metaList = document.getElementById("metaList");
 
-      // photo
       photoWrapper.innerHTML = "";
       if (member.imageData) {
         const img = document.createElement("img");
@@ -803,7 +802,6 @@
         photoWrapper.appendChild(badge);
       }
 
-      // name
       memberName.textContent = member.name || "Unknown Member";
 
       const chamber = member.chamber || "Unknown chamber";
@@ -811,7 +809,6 @@
       const party = member.party || "Unknown party";
       memberLine.textContent = `${chamber} • ${state} • ${party}`;
 
-      // tags
       memberTags.innerHTML = "";
       const tag1 = document.createElement("span");
       tag1.className = "tag";
@@ -835,7 +832,6 @@
         memberTags.appendChild(tagTrending);
       }
 
-      // scores (still using stored values for now, but read-only)
       lifetimeScore.textContent =
         member.lifetimeScore !== null && member.lifetimeScore !== undefined
           ? `${member.lifetimeScore.toFixed
@@ -850,7 +846,6 @@
             : member.currentScore} %`
           : "–";
 
-      // meta list
       metaList.innerHTML = "";
 
       const li1 = document.createElement("li");
@@ -907,7 +902,6 @@
       const endIndex = Math.min(startIndex + votesPageSize, total);
       const slice = memberVotes.slice(startIndex, endIndex);
 
-      // pagination controls
       const infoSpan = document.createElement("span");
       infoSpan.textContent = `Showing ${startIndex + 1}-${endIndex} of ${total}`;
       pagination.appendChild(infoSpan);
@@ -952,7 +946,6 @@
 
       pagination.appendChild(controls);
 
-      // votes list
       slice.forEach((item) => {
         const li = document.createElement("li");
         li.className = "vote-item";
@@ -1204,7 +1197,6 @@
       try {
         let res;
         if (!editingBillId) {
-          // Create new
           res = await fetch(API_BASE + "/api/bills", {
             method: "POST",
             headers: authHeaders({ "Content-Type": "application/json" }),
@@ -1218,7 +1210,6 @@
             }),
           });
         } else {
-          // Update existing
           res = await fetch(API_BASE + "/api/bills/" + encodeURIComponent(editingBillId), {
             method: "PUT",
             headers: authHeaders({ "Content-Type": "application/json" }),
@@ -1245,7 +1236,7 @@
 
         clearBillEditMode();
         await loadAvailableBills();
-        await loadMemberVotes(); // reflect any global changes in the record
+        await loadMemberVotes();
       } catch (err) {
         console.error("Error saving bill:", err);
         alert("Error saving bill.");
@@ -1290,11 +1281,10 @@
       if (!isAdmin || !token) return;
       try {
         const payload = { billId, vote };
-        // Only send isCurrent when explicitly provided (from the form)
         if (typeof isCurrent === "boolean") {
           payload.isCurrent = isCurrent;
         }
-    
+
         const res = await fetch(
           API_BASE + "/api/members/" + encodeURIComponent(memberId) + "/bills",
           {
@@ -1303,21 +1293,21 @@
             body: JSON.stringify(payload),
           }
         );
-    
+
         if (!res.ok) {
           const text = await res.text();
           console.error("Save vote failed:", res.status, text);
           alert("Error saving vote.");
           return;
         }
-    
+
         await loadMemberVotes();
       } catch (err) {
         console.error("Error saving vote:", err);
         alert("Error saving vote.");
       }
     }
-    
+
     async function deleteMemberVote(billId) {
       if (!isAdmin || !token) return;
       try {
@@ -1353,16 +1343,16 @@
     async function handleAttachBill(e) {
       e.preventDefault();
       if (!isAdmin || !token) return;
-    
+
       const billId = document.getElementById("billSelect").value;
       const vote = document.getElementById("voteSelect").value;
       const isCurrent = document.getElementById("voteIsCurrent").checked;
-    
+
       if (!billId) {
         alert("Select a bill first.");
         return;
       }
-    
+
       await attachOrUpdateVote(billId, vote, isCurrent);
     }
 
@@ -1390,7 +1380,6 @@
       }
     }
 
-    // init
     (async function init() {
       if (token) {
         isAdmin = true;
