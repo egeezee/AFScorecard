@@ -5,6 +5,24 @@
   <title>America First Scorecard – Member</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <style>
+    .current-congress-row {
+      margin-top: 0.3rem;
+      display: flex;
+      align-items: center;
+    }
+    
+    .current-congress-row label {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      font-size: 0.85rem;
+    }
+    
+    .current-congress-row input[type="checkbox"] {
+      width: 14px;
+      height: 14px;
+    }
+
     :root {
       --blue: #002b5c;
       --red: #c8102e;
@@ -660,21 +678,21 @@
                 <select id="billSelect" name="billId">
                   <!-- options injected -->
                 </select>
-
+              
                 <label for="voteSelect">How did this member vote?</label>
                 <select id="voteSelect" name="vote">
                   <option value="Approved">Approved / Yes</option>
                   <option value="Opposed">Opposed / No</option>
                   <option value="Abstained">Abstained</option>
                 </select>
-
-                  <label style="display:flex;align-items:center;gap:0.35rem;margin-top:0.3rem;">
+              
+                <div class="current-congress-row">
+                  <label>
                     <input type="checkbox" id="voteIsCurrent" />
                     <span>Count towards current Congress score</span>
                   </label>
-                
-                  <button type="submit" style="margin-top:0.4rem;">Add to Scorecard</button>
-
+                </div>
+              
                 <button type="submit" style="margin-top:0.4rem;">Add to Scorecard</button>
               </form>
             </div>
@@ -1269,39 +1287,37 @@
     }
 
     async function attachOrUpdateVote(billId, vote, isCurrent) {
-  if (!isAdmin || !token) return;
-  try {
-    const payload = { billId, vote };
-    if (typeof isCurrent === "boolean") {
-      payload.isCurrent = isCurrent;
-    }
-
-    const res = await fetch(
-      API_BASE + "/api/members/" + encodeURIComponent(memberId) + "/bills",
-      {
-        method: "POST",
-        headers: authHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify(payload),
+      if (!isAdmin || !token) return;
+      try {
+        const payload = { billId, vote };
+        // Only send isCurrent when explicitly provided (from the form)
+        if (typeof isCurrent === "boolean") {
+          payload.isCurrent = isCurrent;
+        }
+    
+        const res = await fetch(
+          API_BASE + "/api/members/" + encodeURIComponent(memberId) + "/bills",
+          {
+            method: "POST",
+            headers: authHeaders({ "Content-Type": "application/json" }),
+            body: JSON.stringify(payload),
+          }
+        );
+    
+        if (!res.ok) {
+          const text = await res.text();
+          console.error("Save vote failed:", res.status, text);
+          alert("Error saving vote.");
+          return;
+        }
+    
+        await loadMemberVotes();
+      } catch (err) {
+        console.error("Error saving vote:", err);
+        alert("Error saving vote.");
       }
-    );
-
-    if (res.status === 401) {
-      alert("Admin session expired. Please log in again on the main page.");
-      return;
     }
-
-    if (!res.ok) {
-      alert("Error saving vote.");
-      return;
-    }
-
-    await loadMemberVotes();
-  } catch (err) {
-    console.error("Error saving vote:", err);
-    alert("Error saving vote.");
-  }
-}
-
+    
     async function deleteMemberVote(billId) {
       if (!isAdmin || !token) return;
       try {
@@ -1349,7 +1365,6 @@
     
       await attachOrUpdateVote(billId, vote, isCurrent);
     }
-
 
     function handleVotesClick(e) {
       if (!isAdmin || !token) return;
