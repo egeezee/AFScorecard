@@ -90,6 +90,70 @@ async function initDb() {
     );
   `);
 
+  await pool.query(`
+    ALTER TABLE member_votes
+    ADD COLUMN IF NOT EXISTS is_current_congress BOOLEAN DEFAULT FALSE;
+  `);
+
+  async function recomputeScoresForMember(memberId) {
+  // Pull all this member's votes + associated bill classification
+  const { rows } = await pool.query(
+    `
+    SELECT
+      b.af_position AS "afPosition",
+      mv.vote,
+      mv.is_current_congress AS "isCurrent"
+    FROM member_votes mv
+    JOIN bills b ON mv.bill_id = b.id
+    WHERE mv.member_id = $1
+  `,
+    [memberId]
+  );
+
+  let lifetimeCorrect = 0;
+  let lifetimeTotal = 0;
+  let currentCorrect = 0;
+  let currentTotal = 0;
+
+  for (const row of rows) {
+    const afPos = row.afPosition;
+    const vote = row.vote;
+
+    // Ignore bills that are unclassified or "Neither"
+    if (!afPos || afPos === "Neither") continue;
+
+    // Only count clear Yes/No
+    if (vote !== "Approved" && vote !== "Opposed") continue;
+
+    const aligned =
+      (afPos === "America First" && vote === "Approved") ||
+      (afPos === "Anti-America First" && vote === "Opposed");
+
+    lifetimeTotal++;
+    if (aligned) lifetimeCorrect++;
+
+    if (row.isCurrent) {
+      currentTotal++;
+      if (aligned) currentCorrect++;
+    }
+  }
+
+  const lifetimeScore =
+    lifetimeTotal > 0 ? (lifetimeCorrect / lifetimeTotal) * 100 : null;
+  const currentScore =
+    currentTotal > 0 ? (currentCorrect / currentTotal) * 100 : null;
+
+  await pool.query(
+    `
+    UPDATE politicians
+    SET lifetime_score = $2, current_score = $3
+    WHERE id = $1
+  `,
+    [memberId, lifetimeScore, currentScore]
+  );
+}
+
+
   // Seed politicians the first time
   const { rows } = await pool.query("SELECT COUNT(*) AS count FROM politicians");
   const count = parseInt(rows[0].count, 10);
@@ -613,6 +677,8 @@ app.delete("/api/members/:id/bills/:billId", requireAdmin, async (req, res) => {
       return res.status(404).json({ error: "Vote not found for this member/bill" });
     }
 
+    await recomputeScoresForMember(memberId);
+
     res.json({ success: true });
   } catch (err) {
     console.error("Error deleting member vote:", err);
@@ -651,7 +717,6 @@ app.get("/api/members/:id/bills", async (req, res) => {
   }
 });
 
-// create/update a vote for a member on a bill (admin)
 app.post("/api/members/:id/bills", requireAdmin, async (req, res) => {
   const { id: memberId } = req.params;
   const { billId, vote } = req.body || {};
@@ -660,22 +725,35 @@ app.post("/api/members/:id/bills", requireAdmin, async (req, res) => {
     return res.status(400).json({ error: "billId and vote are required" });
   }
 
+  // isCurrent: boolean when provided; null means "don't change existing flag"
+  let isCurrent = null;
+  if (Object.prototype.hasOwnProperty.call(req.body, "isCurrent")) {
+    isCurrent = !!req.body.isCurrent;
+  }
+
   try {
     const result = await pool.query(
       `
-      INSERT INTO member_votes (id, member_id, bill_id, vote)
-      VALUES ($1, $2, $3, $4)
+      INSERT INTO member_votes (id, member_id, bill_id, vote, is_current_congress)
+      VALUES ($1, $2, $3, $4, $5)
       ON CONFLICT (member_id, bill_id)
-      DO UPDATE SET vote = EXCLUDED.vote, created_at = now()
+      DO UPDATE SET
+        vote = EXCLUDED.vote,
+        is_current_congress = COALESCE(EXCLUDED.is_current_congress, member_votes.is_current_congress),
+        created_at = now()
       RETURNING
         id AS "voteId",
         member_id AS "memberId",
         bill_id AS "billId",
         vote,
+        is_current_congress AS "isCurrent",
         created_at AS "createdAt";
     `,
-      [crypto.randomUUID(), memberId, billId, vote]
+      [crypto.randomUUID(), memberId, billId, vote, isCurrent]
     );
+
+    // Recompute scores after change
+    await recomputeScoresForMember(memberId);
 
     res.json(result.rows[0]);
   } catch (err) {
@@ -683,4 +761,5 @@ app.post("/api/members/:id/bills", requireAdmin, async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+
 
