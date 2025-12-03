@@ -126,6 +126,8 @@
       display: flex;
       flex-wrap: wrap;
       gap: 0.5rem;
+      align-items: center;
+      justify-content: flex-end;
     }
 
     button,
@@ -133,7 +135,7 @@
     input[type="search"] {
       border-radius: 999px;
       border: 1px solid var(--border-color);
-      padding: 0.4rem 0.8rem;
+      padding: 0.45rem 0.9rem;
       background: #04142d;
       color: var(--text-light);
       font-size: 0.9rem;
@@ -166,7 +168,7 @@
     }
 
     input[type="search"] {
-      min-width: 180px;
+      min-width: 200px;
     }
 
     table {
@@ -238,22 +240,6 @@
       padding: 0.2rem;
     }
 
-    .trending-dot {
-      position: absolute;
-      bottom: -4px;
-      right: -4px;
-      background: #ff8a00;
-      border-radius: 999px;
-      padding: 0.1rem 0.4rem;
-      font-size: 0.7rem;
-      display: inline-flex;
-      align-items: center;
-      gap: 0.15rem;
-      color: #1b1305;
-      font-weight: 600;
-      box-shadow: 0 0 6px rgba(0, 0, 0, 0.6);
-    }
-
     .member-name-text {
       font-weight: 600;
       cursor: pointer;
@@ -303,11 +289,16 @@
       background: rgba(4, 20, 45, 0.9);
     }
 
+    .actions-cell {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.3rem;
+      justify-content: flex-start;
+    }
+
     .actions-cell button {
-      margin-right: 0.25rem;
-      margin-bottom: 0.2rem;
       font-size: 0.78rem;
-      padding: 0.25rem 0.5rem;
+      padding: 0.25rem 0.6rem;
       text-transform: none;
       letter-spacing: 0;
     }
@@ -460,6 +451,7 @@
       }
       .controls {
         width: 100%;
+        justify-content: center;
       }
       table {
         font-size: 0.85rem;
@@ -468,12 +460,14 @@
       td {
         padding: 0.45rem 0.35rem;
       }
+      .actions-cell {
+        justify-content: flex-start;
+      }
     }
   </style>
 </head>
 <body>
   <header>
-    <!-- Replace "af-logo.png" with your banner/logo file -->
     <img src="af-logo.png" alt="America First Logo" />
 
     <div class="admin-toggle">
@@ -532,7 +526,7 @@
         Public visitors see read-only scorecards. Admins can log in to sync
         current members from Congress.gov, adjust details, upload photos,
         mark trending members, and manage ordering. Scores are computed from
-        the bills & votes system.
+        the bills &amp; votes system.
       </p>
     </section>
   </main>
@@ -565,14 +559,13 @@
 
     let members = [];
     let isAdmin = false;
-    let editingId = null; // which member row is currently being edited
+    let editingId = null;
     let token = localStorage.getItem("afToken") || null;
     let currentPage = 1;
     const pageSize = 10;
     let draggedId = null;
-    const pendingImageData = {}; // memberId -> dataURL
+    const pendingImageData = {};
 
-    // DOM elements
     const tbody = document.getElementById("memberTableBody");
     const searchInput = document.getElementById("searchInput");
     const chamberFilter = document.getElementById("chamberFilter");
@@ -656,7 +649,6 @@
         const tr = document.createElement("tr");
         tr.dataset.id = member.id;
 
-        // drag handle only for admin & not editing
         if (isAdmin && !editingId) {
           tr.setAttribute("draggable", "true");
         } else {
@@ -665,12 +657,12 @@
 
         const isEditing = editingId === member.id;
 
-        // --- drag handle cell ---
+        // drag handle
         const dragTd = document.createElement("td");
         dragTd.innerHTML = isAdmin ? '<span class="drag-handle">☰</span>' : "";
         tr.appendChild(dragTd);
 
-        // --- photo cell ---
+        // photo
         const photoTd = document.createElement("td");
         const photoDiv = document.createElement("div");
         photoDiv.className = "photo-cell";
@@ -690,13 +682,6 @@
           wrapper.appendChild(ph);
         }
 
-        if (member.trending) {
-          const dot = document.createElement("div");
-          dot.className = "trending-dot";
-          dot.innerHTML = "🔥 <span>Trending</span>";
-          wrapper.appendChild(dot);
-        }
-
         photoDiv.appendChild(wrapper);
 
         if (isAdmin && isEditing) {
@@ -710,7 +695,7 @@
         photoTd.appendChild(photoDiv);
         tr.appendChild(photoTd);
 
-        // --- name cell (with link) ---
+        // name
         const nameTd = document.createElement("td");
         if (isEditing && isAdmin) {
           const input = document.createElement("input");
@@ -729,7 +714,7 @@
         }
         tr.appendChild(nameTd);
 
-        // --- chamber ---
+        // chamber
         const chamberTd = document.createElement("td");
         if (isEditing && isAdmin) {
           const select = document.createElement("select");
@@ -747,7 +732,7 @@
         }
         tr.appendChild(chamberTd);
 
-        // --- state ---
+        // state
         const stateTd = document.createElement("td");
         if (isEditing && isAdmin) {
           const input = document.createElement("input");
@@ -761,7 +746,7 @@
         }
         tr.appendChild(stateTd);
 
-        // --- party ---
+        // party
         const partyTd = document.createElement("td");
         if (isEditing && isAdmin) {
           const input = document.createElement("input");
@@ -775,7 +760,7 @@
         }
         tr.appendChild(partyTd);
 
-        // --- lifetime score (read-only, from backend) ---
+        // lifetime score
         const lifetimeTd = document.createElement("td");
         lifetimeTd.textContent =
           member.lifetimeScore !== null && member.lifetimeScore !== undefined
@@ -785,7 +770,7 @@
             : "–";
         tr.appendChild(lifetimeTd);
 
-        // --- current score ---
+        // current score
         const currentTd = document.createElement("td");
         currentTd.textContent =
           member.currentScore !== null && member.currentScore !== undefined
@@ -795,7 +780,7 @@
             : "–";
         tr.appendChild(currentTd);
 
-        // --- trending cell ---
+        // trending
         const trendingTd = document.createElement("td");
         if (isEditing && isAdmin) {
           const label = document.createElement("label");
@@ -823,11 +808,10 @@
         }
         tr.appendChild(trendingTd);
 
-        // --- actions ---
+        // actions
         const actionsTd = document.createElement("td");
         actionsTd.className = "actions-cell";
 
-        // View profile (everyone)
         const viewBtn = document.createElement("button");
         viewBtn.type = "button";
         viewBtn.className = "secondary";
@@ -882,9 +866,7 @@
 
     function renderPagination(total, startIndex, endIndex) {
       paginationEl.innerHTML = "";
-      if (total === 0) {
-        return;
-      }
+      if (total === 0) return;
 
       const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
@@ -933,10 +915,9 @@
       paginationEl.appendChild(controls);
     }
 
-    // --- Admin login logic ---
+    // admin login
     adminToggleBtn.addEventListener("click", () => {
       if (isAdmin) {
-        // logout
         token = null;
         localStorage.removeItem("afToken");
         isAdmin = false;
@@ -991,7 +972,7 @@
       }
     });
 
-    // --- Search & filter ---
+    // search & filter
     searchInput.addEventListener("input", () => {
       currentPage = 1;
       renderTable();
@@ -1001,7 +982,7 @@
       renderTable();
     });
 
-    // --- Add member ---
+    // add member
     if (addMemberBtn) {
       addMemberBtn.addEventListener("click", async () => {
         if (!isAdmin || !token) return;
@@ -1033,7 +1014,7 @@
       });
     }
 
-    // --- Sync from Congress.gov ---
+    // sync members
     if (syncMembersBtn) {
       syncMembersBtn.addEventListener("click", async () => {
         if (!isAdmin || !token) {
@@ -1081,7 +1062,7 @@
       });
     }
 
-    // --- Table actions (edit/save/cancel/remove/view) ---
+    // row actions
     tbody.addEventListener("click", async (e) => {
       const btn = e.target.closest("button");
       if (!btn) return;
@@ -1160,9 +1141,7 @@
           }
           const updated = await res.json();
           const idx = members.findIndex((m) => m.id === id);
-          if (idx !== -1) {
-            members[idx] = updated;
-          }
+          if (idx !== -1) members[idx] = updated;
           editingId = null;
           delete pendingImageData[id];
           renderTable();
@@ -1173,7 +1152,7 @@
       }
     });
 
-    // --- Photo upload handling ---
+    // photo upload
     tbody.addEventListener("change", (e) => {
       const input = e.target;
       if (!input.classList.contains("photo-input")) return;
@@ -1200,7 +1179,7 @@
       reader.readAsDataURL(file);
     });
 
-    // --- Drag & drop reorder (admin only) ---
+    // drag & drop ordering
     tbody.addEventListener("dragstart", (e) => {
       if (!isAdmin || editingId) return;
       const tr = e.target.closest("tr");
@@ -1235,7 +1214,6 @@
       if (!isAdmin || editingId || !draggedId) return;
       e.preventDefault();
 
-      // Rebuild members array in new order based on DOM
       const rows = [...tbody.querySelectorAll("tr")];
       const newOrderIds = rows.map((r) => r.dataset.id);
       const idToMember = {};
@@ -1281,7 +1259,6 @@
       ).element;
     }
 
-    // --- init ---
     (async function init() {
       if (token) {
         isAdmin = true;
