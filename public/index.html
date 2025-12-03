@@ -732,13 +732,11 @@
             }" />`
           : `<span class="display-text">${member.party || ""}</span>`;
 
-        const lifetimeCell = isEditing
-          ? `<input type="number" name="lifetimeScore" ...>`
-          : `<span class="display-text">${member.lifetimeScore ?? ""}</span>`;
+        const lifetimeCell =
+          `<span class="display-text">${member.lifetimeScore ?? ""}</span>`;
 
-        const currentCell = isEditing
-          ? `<input type="number" name="currentScore" ...>`
-          : `<span class="display-text">${member.currentScore ?? ""}</span>`;
+        const currentCell =
+          `<span class="display-text">${member.currentScore ?? ""}</span>`;
 
         const actionsCell = isAdmin
           ? `
