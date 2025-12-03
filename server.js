@@ -224,8 +224,6 @@ app.put("/api/members/:id", requireAdmin, async (req, res) => {
     "chamber",
     "state",
     "party",
-    "lifetimeScore",
-    "currentScore",
     "imageData",
     "trending",
     "position",
@@ -494,6 +492,130 @@ app.post("/api/bills", requireAdmin, async (req, res) => {
     res.status(201).json(insertResult.rows[0]);
   } catch (err) {
     console.error("Error creating bill:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// update a bill globally (admin)
+app.put("/api/bills/:id", requireAdmin, async (req, res) => {
+  const { id } = req.params;
+
+  const allowedFields = [
+    "title",
+    "chamber",
+    "afPosition",
+    "billDate",
+    "description",
+    "govLink",
+  ];
+
+  const updates = {};
+  for (const key of allowedFields) {
+    if (key in req.body) {
+      updates[key] = req.body[key];
+    }
+  }
+
+  if (Object.keys(updates).length === 0) {
+    return res.status(400).json({ error: "No valid fields to update" });
+  }
+
+  const fieldToColumn = {
+    title: "title",
+    chamber: "chamber",
+    afPosition: "af_position",
+    billDate: "bill_date",
+    description: "description",
+    govLink: "gov_link",
+  };
+
+  const setClauses = [];
+  const values = [];
+  let idx = 1;
+  for (const [key, value] of Object.entries(updates)) {
+    setClauses.push(`${fieldToColumn[key]} = $${idx++}`);
+    values.push(value);
+  }
+  values.push(id);
+
+  const query = `
+    UPDATE bills
+    SET ${setClauses.join(", ")}
+    WHERE id = $${idx}
+    RETURNING
+      id,
+      title,
+      chamber,
+      af_position AS "afPosition",
+      bill_date AS "billDate",
+      description,
+      gov_link AS "govLink";
+  `;
+
+  try {
+    const result = await pool.query(query, values);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Bill not found" });
+    }
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error("Error updating bill:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// delete a bill globally (admin)
+app.delete("/api/bills/:id", requireAdmin, async (req, res) => {
+  const { id } = req.params;
+  try {
+    const result = await pool.query(
+      `
+      DELETE FROM bills
+      WHERE id = $1
+      RETURNING
+        id,
+        title,
+        chamber,
+        af_position AS "afPosition",
+        bill_date AS "billDate",
+        description,
+        gov_link AS "govLink";
+    `,
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Bill not found" });
+    }
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error("Error deleting bill:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// remove a bill from a single member's record (admin)
+app.delete("/api/members/:id/bills/:billId", requireAdmin, async (req, res) => {
+  const { id: memberId, billId } = req.params;
+
+  try {
+    const result = await pool.query(
+      `
+      DELETE FROM member_votes
+      WHERE member_id = $1 AND bill_id = $2
+      RETURNING id;
+    `,
+      [memberId, billId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Vote not found for this member/bill" });
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Error deleting member vote:", err);
     res.status(500).json({ error: "Server error" });
   }
 });
