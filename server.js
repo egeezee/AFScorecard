@@ -371,14 +371,36 @@ async function fetchAllCurrentMembersFromCongressGov() {
 }
 
 function normalizeCongressMembers(rawMembers) {
-  const mapped = rawMembers.map((m) => {
-    const bioguideId = m.bioguideId || null;
-
-    const name =
-      m.fullName ||
-      [m.firstName, m.lastName].filter(Boolean).join(" ") ||
+  const normalized = (rawMembers || []).map((m) => {
+    // bioguide ID is the key that lets us match votes later
+    const bioguideId =
+      m.bioguideId ||
+      (m.identifiers && m.identifiers.bioguideId) ||
       null;
 
+    // Try multiple possible name shapes
+    let name =
+      m.nameKnown ||           // some Congress.gov payloads
+      m.fullName ||            // some payloads
+      m.nameOfficial ||        // some payloads
+      m.name ||                // sometimes a plain string
+      null;
+
+    // If name is an object like { first, last }
+    if (name && typeof name === "object") {
+      name =
+        [name.first, name.middle, name.last].filter(Boolean).join(" ") ||
+        null;
+    }
+
+    if (!name) {
+      // last-ditch: first + last fields
+      name = [m.firstName, m.middleName, m.lastName]
+        .filter(Boolean)
+        .join(" ") || null;
+    }
+
+    // State: we’ve seen it as a full name ("Washington") or codes
     const rawState =
       m.stateCode ||
       (typeof m.state === "string" ? m.state : null) ||
@@ -386,31 +408,32 @@ function normalizeCongressMembers(rawMembers) {
       (m.roles && m.roles[0] && (m.roles[0].state || m.roles[0].stateCode)) ||
       null;
 
-    const state = normalizeState(rawState);
+    const state = normalizeState(rawState); // your helper
 
-    let partyRaw =
+    // Party: don’t REQUIRE this to exist anymore
+    let party =
       m.party ||
+      (m.currentParty && m.currentParty.name) ||
       (m.roles && m.roles[0] && m.roles[0].party) ||
-      (m.terms && m.terms[0] && m.terms[0].party) ||
       null;
 
-    let party = null;
-    if (partyRaw) {
-      const p = String(partyRaw).toLowerCase();
+    if (party) {
+      const p = String(party).toLowerCase();
       if (p.startsWith("republican")) party = "R";
       else if (p.startsWith("democrat")) party = "D";
       else if (p.startsWith("independent")) party = "I";
-      else party = String(partyRaw).toUpperCase().slice(0, 3);
+      else party = String(party).toUpperCase().slice(0, 3);
     }
 
+    // Chamber: nice to have, not required
     let chamber =
       m.chamber ||
+      (m.currentRole && m.currentRole.chamber) ||
       (m.roles && m.roles[0] && m.roles[0].chamber) ||
-      (m.terms && m.terms[0] && m.terms[0].chamber) ||
       null;
 
-    if (chamber) {
-      const lc = String(chamber).toLowerCase();
+    if (typeof chamber === "string") {
+      const lc = chamber.toLowerCase();
       if (lc.includes("house")) chamber = "House";
       else if (lc.includes("senate")) chamber = "Senate";
     }
@@ -422,7 +445,26 @@ function normalizeCongressMembers(rawMembers) {
       party,
       chamber,
     };
-  });
+  })
+  // NOTE: **we only require bioguideId + name + 2-letter state**
+  // Party *not* required anymore (this is what was killing everything before)
+  .filter(
+    (m) =>
+      m.bioguideId &&
+      m.name &&
+      m.state &&
+      m.state.length === 2
+  );
+
+  console.log(
+    "[normalizeCongressMembers] usable:",
+    normalized.length,
+    "sample:",
+    normalized[0]
+  );
+
+  return normalized;
+}
 
   // Debug samples so you can see what we're getting
   mapped.slice(0, 25).forEach((m) =>
@@ -538,38 +580,82 @@ app.post("/api/admin/sync-members", requireAdmin, async (req, res) => {
 // -----------------------------
 
 function normalizeCongressBill(apiBill) {
-  const congress = apiBill.congress || null;
-  const billTypeRaw = apiBill.type || apiBill.billType || null;
-  const billNumberRaw = apiBill.number || apiBill.billNumber || null;
-  const billNumber = billNumberRaw ? parseInt(billNumberRaw, 10) : null;
-  let billType = billTypeRaw ? String(billTypeRaw).toLowerCase() : null;
+  if (!apiBill) return null;
 
+  const congress =
+    apiBill.congress ||
+    apiBill.congressNumber ||
+    apiBill.congressNum ||
+    null;
+
+  const billTypeRaw =
+    apiBill.type ||
+    apiBill.billType ||
+    (apiBill.bill && apiBill.bill.type) ||
+    null;
+
+  const billNumberRaw =
+    apiBill.number ||
+    apiBill.billNumber ||
+    (apiBill.bill && apiBill.bill.number) ||
+    null;
+
+  const billNumber = billNumberRaw ? parseInt(billNumberRaw, 10) : null;
+  const billType = billTypeRaw ? String(billTypeRaw).toLowerCase() : null;
+
+  // Only *hard* requirement: congress + type + number, otherwise we can't
+  // build the URL for the votes endpoint.
   if (!congress || !billType || !billNumber) {
     return null;
   }
 
-  let chamber = apiBill.originChamber || apiBill.chamber || null;
+  // Title – try everything, fall back to generic
+  let title =
+    apiBill.title ||
+    apiBill.titleWithoutNumber ||
+    apiBill.shortTitle ||
+    apiBill.formattedTitle ||
+    (apiBill.bill && (apiBill.bill.title || apiBill.bill.titleWithoutNumber)) ||
+    null;
+
+  if (!title) {
+    title = `${String(billType).toUpperCase()} ${billNumber}`;
+  }
+
+  // Latest action date -> billDate
+  const latestAction =
+    apiBill.latestAction ||
+    apiBill.latestMajorAction ||
+    (Array.isArray(apiBill.actions) && apiBill.actions[0]) ||
+    null;
+
+  let billDate = null;
+  if (latestAction && latestAction.actionDate) {
+    billDate = new Date(latestAction.actionDate);
+  } else if (latestAction && latestAction.date) {
+    billDate = new Date(latestAction.date);
+  } else if (apiBill.updateDate) {
+    billDate = new Date(apiBill.updateDate);
+  }
+
+  // Link
+  const govLink =
+    apiBill.url ||
+    (latestAction && latestAction.url) ||
+    apiBill.congressdotgov_url ||
+    null;
+
+  // Chamber
+  let chamber =
+    apiBill.originChamber ||
+    apiBill.chamber ||
+    (apiBill.bill && apiBill.bill.originChamber) ||
+    null;
+
   if (!chamber && billType.startsWith("h")) chamber = "House";
   if (!chamber && billType.startsWith("s")) chamber = "Senate";
 
-  const title =
-    apiBill.title ||
-    apiBill.titleWithoutNumber ||
-    `Bill ${billType.toUpperCase()} ${billNumber}`;
-
-  const latestDate =
-    (apiBill.latestAction && apiBill.latestAction.actionDate) ||
-    apiBill.updateDate ||
-    null;
-
-  const billDate = latestDate ? new Date(latestDate) : null;
-
-  const govLink =
-    apiBill.url ||
-    (apiBill.latestAction && apiBill.latestAction.url) ||
-    null;
-
-  return {
+  const normalized = {
     congress,
     billType,
     billNumber,
@@ -578,6 +664,8 @@ function normalizeCongressBill(apiBill) {
     billDate,
     govLink,
   };
+
+  return normalized;
 }
 
 async function fetchRecentBillsFromCongressGov() {
