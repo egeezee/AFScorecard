@@ -111,7 +111,7 @@
     }
 
     .card + .card {
-      margin-top: 1.25rem;
+      margin-top: 1.5rem;
     }
 
     .card-header {
@@ -208,11 +208,26 @@
       color: #c9d3e8;
     }
 
-    /* Actions column alignment */
+    /* Actions column */
     th.actions-col,
     td.actions-col {
       text-align: center;
-      width: 140px;
+      width: 160px;
+    }
+
+    .actions-cell {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.3rem;
+      justify-content: center; /* center the View button under header */
+      align-items: center;
+    }
+
+    .actions-cell button {
+      font-size: 0.78rem;
+      padding: 0.25rem 0.6rem;
+      text-transform: none;
+      letter-spacing: 0;
     }
 
     tbody tr:nth-child(even) {
@@ -304,22 +319,6 @@
       border-radius: 999px;
       border: 1px solid rgba(255, 255, 255, 0.3);
       background: rgba(4, 20, 45, 0.9);
-    }
-
-    .actions-cell {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.3rem;
-      justify-content: center;
-      align-items: center;
-    }
-
-    .actions-cell button {
-      font-size: 0.78rem;
-      padding: 0.25rem 0.6rem;
-      text-transform: none;
-      letter-spacing: 0;
-      margin: 0;
     }
 
     .footnote {
@@ -458,17 +457,24 @@
       white-space: normal;
     }
 
-    .bill-title-cell a {
-      color: var(--text-light);
-      text-decoration: none;
+    .bill-meta {
+      font-size: 0.8rem;
+      color: #c9d3e8;
+      opacity: 0.9;
     }
 
-    .bill-title-cell a:hover {
-      text-decoration: underline;
+    .rate-buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.25rem;
+      justify-content: center;
     }
 
-    .bill-rating-select {
-      min-width: 180px;
+    .rate-buttons button {
+      font-size: 0.75rem;
+      padding: 0.22rem 0.55rem;
+      text-transform: none;
+      letter-spacing: 0;
     }
 
     @media (max-width: 900px) {
@@ -476,8 +482,7 @@
       td:nth-child(4),
       th:nth-child(5),
       td:nth-child(5) {
-        /* hide chamber+state on narrow screens for member table */
-        /* this targets the 1st table; bill docket is later and unaffected */
+        /* hide some mid columns on narrow screens, adjust if needed */
       }
     }
 
@@ -500,7 +505,10 @@
         padding: 0.45rem 0.35rem;
       }
       .actions-cell {
-        justify-content: flex-start; /* keep mobile tidy */
+        justify-content: flex-start;
+      }
+      .bill-title-cell {
+        max-width: 260px;
       }
     }
   </style>
@@ -518,7 +526,7 @@
   </header>
 
   <main>
-    <!-- MEMBER SCORECARDS -->
+    <!-- MEMBER SCORECARDS CARD -->
     <section class="card">
       <div class="card-header">
         <h2>Member Scorecards</h2>
@@ -575,37 +583,37 @@
       <div class="card-header">
         <h2>America First Bill Docket</h2>
         <div class="controls">
-          <select id="billFilter">
-            <option value="unrated">Unrated only</option>
-            <option value="all">All bills</option>
-          </select>
-          <button id="syncBillsBtn">Sync Recent Bills</button>
+          <button id="syncBillsBtn" style="display:none;">
+            Sync Recent Bills
+          </button>
         </div>
       </div>
+
+      <p class="footnote" style="margin-top:0; margin-bottom:0.75rem;">
+        Admins can sync recent Congressional bills, then label each one as
+        <strong>America First</strong>, <strong>Neither</strong>, or
+        <strong>Anti-America First</strong>. Votes will automatically attach
+        to each member's scorecard once rated.
+      </p>
 
       <div class="table-wrapper">
         <table>
           <thead>
             <tr>
-              <th>Bill</th>
-              <th>Chamber</th>
-              <th>Congress</th>
-              <th>AF Rating</th>
               <th>Date</th>
-              <th class="actions-col">Actions</th>
+              <th>Title</th>
+              <th>Chamber</th>
+              <th>Bill</th>
+              <th>Link</th>
+              <th class="actions-col">Rate</th>
             </tr>
           </thead>
-          <tbody id="billTableBody"></tbody>
+          <tbody id="docketTableBody"></tbody>
         </table>
       </div>
 
-      <p class="footnote">
-        Only admins can view and manage this docket. Use the sync button to
-        pull in recent passed bills from Congress.gov (back to 2023), then
-        classify each bill as <em>America First</em>, <em>Neither</em>, or
-        <em>Anti-America First</em>. After a bill is rated, the server
-        updates each member’s record and recomputes their scores based on
-        how they voted.
+      <p class="footnote" id="docketStatus">
+        Admin only area. Log in as admin to view unrated bills.
       </p>
     </section>
   </main>
@@ -614,7 +622,7 @@
   <div class="admin-login-panel" id="adminLoginPanel">
     <div class="admin-login-card">
       <h3>Admin Login</h3>
-      <p>Enter the admin password to add/edit members, sync Congress members, and manage the America First Bill Docket.</p>
+      <p>Enter the admin password to add/edit members, sync Congress data, and rate bills.</p>
       <form id="adminLoginForm">
         <input
           type="password"
@@ -637,17 +645,19 @@
     const API_BASE = ""; // same origin
 
     let members = [];
-    let bills = [];
     let isAdmin = false;
     let editingId = null;
     let token = localStorage.getItem("afToken") || null;
     let currentPage = 1;
-    const pageSize = 70; // 70 members per page
+    const pageSize = 70; // 70 politicians per page
+
     let draggedId = null;
     const pendingImageData = {};
-    let billFilterMode = "unrated";
 
-    // DOM references
+    // Bill docket state
+    let docketBills = [];
+
+    // DOM refs
     const tbody = document.getElementById("memberTableBody");
     const searchInput = document.getElementById("searchInput");
     const chamberFilter = document.getElementById("chamberFilter");
@@ -665,9 +675,9 @@
 
     // Bill docket DOM
     const billDocketCard = document.getElementById("billDocketCard");
-    const billTableBody = document.getElementById("billTableBody");
-    const billFilterSelect = document.getElementById("billFilter");
     const syncBillsBtn = document.getElementById("syncBillsBtn");
+    const docketTableBody = document.getElementById("docketTableBody");
+    const docketStatus = document.getElementById("docketStatus");
 
     function authHeaders(extra = {}) {
       const headers = { ...extra };
@@ -675,28 +685,39 @@
       return headers;
     }
 
+    function clearAdminSession() {
+      token = null;
+      localStorage.removeItem("afToken");
+      isAdmin = false;
+    }
+
     function updateAdminUI() {
       if (isAdmin) {
         adminStatus.textContent = "Admin";
         adminToggleBtn.textContent = "Logout";
         adminToggleBtn.classList.add("admin-active");
-        addMemberBtn.style.display = "inline-block";
-        syncMembersBtn.style.display = "inline-block";
+        if (addMemberBtn) addMemberBtn.style.display = "inline-block";
+        if (syncMembersBtn) syncMembersBtn.style.display = "inline-block";
+        if (syncBillsBtn) syncBillsBtn.style.display = "inline-block";
         if (billDocketCard) billDocketCard.style.display = "block";
+        loadAdminDocket();
       } else {
         adminStatus.textContent = "Viewer";
         adminToggleBtn.textContent = "Admin Login";
         adminToggleBtn.classList.remove("admin-active");
-        addMemberBtn.style.display = "none";
-        syncMembersBtn.style.display = "none";
+        if (addMemberBtn) addMemberBtn.style.display = "none";
+        if (syncMembersBtn) syncMembersBtn.style.display = "none";
+        if (syncBillsBtn) syncBillsBtn.style.display = "none";
         if (billDocketCard) billDocketCard.style.display = "none";
         editingId = null;
+        docketBills = [];
+        if (docketTableBody) docketTableBody.innerHTML = "";
+        if (docketStatus) docketStatus.textContent = "Admin only area. Log in as admin to view unrated bills.";
       }
-      renderMemberTable();
-      renderBillTable();
+      renderTable();
     }
 
-    // ------------- MEMBERS ---------------
+    // --- MEMBERS ---
 
     async function fetchMembers() {
       try {
@@ -707,7 +728,7 @@
         }
         members = await res.json();
         currentPage = 1;
-        renderMemberTable();
+        renderTable();
       } catch (err) {
         console.error("Network error fetching members:", err);
       }
@@ -720,16 +741,13 @@
       return members.filter((m) => {
         const chamberMatch =
           chamberValue === "all" || m.chamber === chamberValue;
-        const text = `${m.name || ""} ${m.state || ""} ${
-          m.party || ""
-        }`.toLowerCase();
+        const text = `${m.name || ""} ${m.state || ""} ${m.party || ""}`.toLowerCase();
         const searchMatch = !searchTerm || text.includes(searchTerm);
         return chamberMatch && searchMatch;
       });
     }
 
-    function renderMemberTable() {
-      if (!tbody) return;
+    function renderTable() {
       const filtered = getFilteredMembers();
       const total = filtered.length;
       const totalPages = Math.max(1, Math.ceil(total / pageSize));
@@ -755,7 +773,7 @@
 
         // drag handle
         const dragTd = document.createElement("td");
-        dragTd.innerHTML = isAdmin ? '<span class="drag-handle">☰</span>' : "";
+        dragTd.innerHTML = isAdmin && !editingId ? '<span class="drag-handle">☰</span>' : "";
         tr.appendChild(dragTd);
 
         // photo
@@ -981,7 +999,7 @@
       prevBtn.onclick = () => {
         if (currentPage > 1) {
           currentPage--;
-          renderMemberTable();
+          renderTable();
         }
       };
       controls.appendChild(prevBtn);
@@ -992,7 +1010,7 @@
         if (p === currentPage) btn.classList.add("current");
         btn.onclick = () => {
           currentPage = p;
-          renderMemberTable();
+          renderTable();
         };
         controls.appendChild(btn);
       }
@@ -1003,7 +1021,7 @@
       nextBtn.onclick = () => {
         if (currentPage < totalPages) {
           currentPage++;
-          renderMemberTable();
+          renderTable();
         }
       };
       controls.appendChild(nextBtn);
@@ -1011,13 +1029,11 @@
       paginationEl.appendChild(controls);
     }
 
-    // ------------- ADMIN LOGIN ------------
+    // --- ADMIN LOGIN ---
 
     adminToggleBtn.addEventListener("click", () => {
       if (isAdmin) {
-        token = null;
-        localStorage.removeItem("afToken");
-        isAdmin = false;
+        clearAdminSession();
         updateAdminUI();
       } else {
         adminError.textContent = "";
@@ -1063,24 +1079,23 @@
         adminLoginPanel.classList.remove("active");
         adminError.textContent = "";
         updateAdminUI();
-        await fetchBills(); // load docket as soon as we log in
       } catch (err) {
         console.error("Error logging in:", err);
         adminError.textContent = "Network error.";
       }
     });
 
-    // search & filter
+    // --- SEARCH & FILTER ---
     searchInput.addEventListener("input", () => {
       currentPage = 1;
-      renderMemberTable();
+      renderTable();
     });
     chamberFilter.addEventListener("change", () => {
       currentPage = 1;
-      renderMemberTable();
+      renderTable();
     });
 
-    // add member
+    // --- ADD MEMBER ---
     if (addMemberBtn) {
       addMemberBtn.addEventListener("click", async () => {
         if (!isAdmin || !token) return;
@@ -1104,7 +1119,7 @@
           const newMember = await res.json();
           members.push(newMember);
           currentPage = 1;
-          renderMemberTable();
+          renderTable();
         } catch (err) {
           console.error("Error adding member:", err);
           alert("Error adding member.");
@@ -1112,7 +1127,7 @@
       });
     }
 
-    // sync members
+    // --- SYNC MEMBERS ---
     if (syncMembersBtn) {
       syncMembersBtn.addEventListener("click", async () => {
         if (!isAdmin || !token) {
@@ -1137,21 +1152,28 @@
             headers: authHeaders({ "Content-Type": "application/json" }),
           });
 
+          if (res.status === 401) {
+            alert("Admin session expired. Please log in again.");
+            clearAdminSession();
+            updateAdminUI();
+            return;
+          }
+
           if (!res.ok) {
             const text = await res.text();
-            console.error("Sync members error:", res.status, text);
-            alert("Error syncing members. Check console logs for details.");
+            console.error("Sync error:", res.status, text);
+            alert("Error syncing members. Check console logs.");
           } else {
             const data = await res.json();
             alert(
-              `Member sync complete.\nImported/updated approx. ${
-                data.importedCount ?? data.imported ?? "?"
-              } members.`
+              `Member sync complete.\nImported: ${data.importedCount ?? "?"}\nUpdated: ${
+                data.updatedCount ?? "?"
+              }`
             );
             await fetchMembers();
           }
         } catch (err) {
-          console.error("Sync members request failed:", err);
+          console.error("Sync request failed:", err);
           alert("Network error while syncing members.");
         } finally {
           syncMembersBtn.disabled = false;
@@ -1160,7 +1182,7 @@
       });
     }
 
-    // row actions (members table)
+    // --- ROW ACTIONS (VIEW/EDIT/SAVE/DELETE) ---
     tbody.addEventListener("click", async (e) => {
       const btn = e.target.closest("button");
       if (!btn) return;
@@ -1180,14 +1202,14 @@
 
       if (action === "edit") {
         editingId = id;
-        renderMemberTable();
+        renderTable();
         return;
       }
 
       if (action === "cancel") {
         editingId = null;
         delete pendingImageData[id];
-        renderMemberTable();
+        renderTable();
         return;
       }
 
@@ -1201,13 +1223,19 @@
               headers: authHeaders(),
             }
           );
+          if (res.status === 401) {
+            alert("Admin session expired. Please log in again.");
+            clearAdminSession();
+            updateAdminUI();
+            return;
+          }
           if (!res.ok) {
             alert("Error deleting member.");
             return;
           }
           members = members.filter((m) => m.id !== id);
           editingId = null;
-          renderMemberTable();
+          renderTable();
         } catch (err) {
           console.error("Error deleting member:", err);
           alert("Error deleting member.");
@@ -1239,6 +1267,12 @@
               body: JSON.stringify(payload),
             }
           );
+          if (res.status === 401) {
+            alert("Admin session expired. Please log in again.");
+            clearAdminSession();
+            updateAdminUI();
+            return;
+          }
           if (!res.ok) {
             alert("Error saving member.");
             return;
@@ -1248,7 +1282,7 @@
           if (idx !== -1) members[idx] = updated;
           editingId = null;
           delete pendingImageData[id];
-          renderMemberTable();
+          renderTable();
         } catch (err) {
           console.error("Error saving member:", err);
           alert("Error saving member.");
@@ -1256,7 +1290,7 @@
       }
     });
 
-    // photo upload
+    // --- PHOTO UPLOAD ---
     tbody.addEventListener("change", (e) => {
       const input = e.target;
       if (!input.classList.contains("photo-input")) return;
@@ -1283,7 +1317,7 @@
       reader.readAsDataURL(file);
     });
 
-    // drag & drop ordering
+    // --- DRAG & DROP ORDERING ---
     tbody.addEventListener("dragstart", (e) => {
       if (!isAdmin || editingId) return;
       const tr = e.target.closest("tr");
@@ -1332,6 +1366,12 @@
           headers: authHeaders({ "Content-Type": "application/json" }),
           body: JSON.stringify({ ids: newOrderIds }),
         });
+        if (res.status === 401) {
+          alert("Admin session expired. Please log in again.");
+          clearAdminSession();
+          updateAdminUI();
+          return;
+        }
         if (!res.ok) {
           console.error("Error saving reorder:", res.status);
           alert("Error saving new order.");
@@ -1340,7 +1380,7 @@
         console.error("Error reordering members:", err);
         alert("Error saving new order.");
       } finally {
-        renderMemberTable();
+        renderTable();
       }
     });
 
@@ -1363,163 +1403,235 @@
       ).element;
     }
 
-    // ------------- BILL DOCKET (ADMIN ONLY) -------------
+    // --- BILL DOCKET (ADMIN ONLY) ---
 
-    async function fetchBills() {
-      if (!billTableBody) return;
+    async function loadAdminDocket() {
+      if (!isAdmin || !token) return;
+      if (docketStatus) docketStatus.textContent = "Loading docket…";
+
       try {
-        const res = await fetch(API_BASE + "/api/bills");
-        if (!res.ok) {
-          console.error("Error fetching bills:", res.status);
+        const res = await fetch(
+          API_BASE + "/api/admin/docket?limit=200",
+          { headers: authHeaders() }
+        );
+
+        if (res.status === 401) {
+          alert("Admin session expired. Please log in again.");
+          clearAdminSession();
+          updateAdminUI();
           return;
         }
-        bills = await res.json();
-        renderBillTable();
+
+        if (!res.ok) {
+          const txt = await res.text();
+          console.error("Error loading docket:", res.status, txt);
+          if (docketStatus) docketStatus.textContent = "Error loading docket bills.";
+          return;
+        }
+
+        docketBills = await res.json();
+        renderDocket();
       } catch (err) {
-        console.error("Network error fetching bills:", err);
+        console.error("Network error loading docket:", err);
+        if (docketStatus) docketStatus.textContent = "Network error loading docket.";
       }
     }
 
-    function renderBillTable() {
-      if (!billTableBody) return;
-      billTableBody.innerHTML = "";
+    function renderDocket() {
+      if (!docketTableBody) return;
+      docketTableBody.innerHTML = "";
 
-      let subset = bills;
-      if (billFilterMode === "unrated") {
-        subset = bills.filter(
-          (b) => !b.afPosition || b.afPosition === null || b.afPosition === ""
-        );
+      if (!isAdmin || !token) {
+        if (docketStatus)
+          docketStatus.textContent = "Admin only area. Log in as admin to view unrated bills.";
+        return;
       }
 
-      subset.sort((a, b) => {
-        const da = a.billDate || "";
-        const db = b.billDate || "";
-        if (da === db) return (b.title || "").localeCompare(a.title || "");
-        return db.localeCompare(da);
-      });
+      if (!docketBills.length) {
+        if (docketStatus) docketStatus.textContent = "No unrated bills at the moment.";
+        return;
+      }
 
-      subset.forEach((bill) => {
+      if (docketStatus)
+        docketStatus.textContent = `${docketBills.length} unrated bill(s) in the docket.`;
+
+      docketBills.forEach((b) => {
         const tr = document.createElement("tr");
-        tr.dataset.id = bill.id;
+        tr.dataset.id = b.id;
+
+        // date
+        const dateTd = document.createElement("td");
+        if (b.billDate) {
+          const d = new Date(b.billDate);
+          if (!isNaN(d.getTime())) {
+            dateTd.textContent = d.toLocaleDateString("en-US", {
+              year: "numeric",
+              month: "short",
+              day: "numeric",
+            });
+          } else {
+            dateTd.textContent = b.billDate;
+          }
+        } else {
+          dateTd.textContent = "–";
+        }
+        tr.appendChild(dateTd);
 
         // title
         const titleTd = document.createElement("td");
         titleTd.className = "bill-title-cell";
-        if (bill.govLink) {
-          const a = document.createElement("a");
-          a.href = bill.govLink;
-          a.target = "_blank";
-          a.rel = "noopener noreferrer";
-          a.textContent = bill.title || "(No title)";
-          titleTd.appendChild(a);
+        const titleDiv = document.createElement("div");
+        titleDiv.textContent = b.title || "Untitled bill";
+
+        if (b.description) {
+          const meta = document.createElement("div");
+          meta.className = "bill-meta";
+          meta.textContent = b.description;
+          titleTd.appendChild(titleDiv);
+          titleTd.appendChild(meta);
         } else {
-          titleTd.textContent = bill.title || "(No title)";
+          titleTd.appendChild(titleDiv);
         }
         tr.appendChild(titleTd);
 
         // chamber
         const chamberTd = document.createElement("td");
-        chamberTd.textContent = bill.chamber || "";
+        chamberTd.textContent = b.chamber || "";
         tr.appendChild(chamberTd);
 
-        // congress
-        const congressTd = document.createElement("td");
-        congressTd.textContent = bill.congress || "";
-        tr.appendChild(congressTd);
+        // bill code (congress + type + number)
+        const codeTd = document.createElement("td");
+        const parts = [];
+        if (b.congress) parts.push(`${b.congress}th`);
+        if (b.billType) parts.push(String(b.billType).toUpperCase());
+        if (b.billNumber) parts.push(String(b.billNumber));
+        codeTd.textContent = parts.join(" ");
+        tr.appendChild(codeTd);
 
-        // AF rating
-        const ratingTd = document.createElement("td");
-        if (isAdmin) {
-          const sel = document.createElement("select");
-          sel.className = "bill-rating-select";
-          const options = [
-            { value: "", label: "Not rated" },
-            { value: "America First", label: "America First" },
-            { value: "Neither", label: "Neither" },
-            { value: "Anti-America First", label: "Anti-America First" },
-          ];
-          options.forEach((opt) => {
-            const o = document.createElement("option");
-            o.value = opt.value;
-            o.textContent = opt.label;
-            if (bill.afPosition === opt.value) o.selected = true;
-            sel.appendChild(o);
-          });
-          ratingTd.appendChild(sel);
+        // link
+        const linkTd = document.createElement("td");
+        if (b.govLink) {
+          const a = document.createElement("a");
+          a.href = b.govLink;
+          a.target = "_blank";
+          a.rel = "noopener noreferrer";
+          a.textContent = "View";
+          a.style.color = "#9fc5ff";
+          linkTd.appendChild(a);
         } else {
-          ratingTd.textContent = bill.afPosition || "";
+          linkTd.textContent = "—";
         }
-        tr.appendChild(ratingTd);
+        tr.appendChild(linkTd);
 
-        // date
-        const dateTd = document.createElement("td");
-        if (bill.billDate) {
-          const d = new Date(bill.billDate);
-          if (!isNaN(d)) {
-            dateTd.textContent = d.toLocaleDateString("en-US", {
-              month: "short",
-              day: "numeric",
-              year: "numeric",
-            });
-          } else {
-            dateTd.textContent = bill.billDate;
-          }
-        } else {
-          dateTd.textContent = "";
-        }
-        tr.appendChild(dateTd);
+        // rate buttons
+        const rateTd = document.createElement("td");
+        rateTd.className = "actions-col";
+        const rateWrap = document.createElement("div");
+        rateWrap.className = "rate-buttons";
 
-        // actions
-        const actionsTd = document.createElement("td");
-        actionsTd.className = "actions-cell actions-col";
+        const afBtn = document.createElement("button");
+        afBtn.type = "button";
+        afBtn.dataset.af = "America First";
+        afBtn.textContent = "America First";
+        rateWrap.appendChild(afBtn);
 
-        if (isAdmin) {
-          const saveBtn = document.createElement("button");
-          saveBtn.type = "button";
-          saveBtn.textContent = "Save Rating";
-          saveBtn.dataset.action = "save-bill";
-          actionsTd.appendChild(saveBtn);
+        const neitherBtn = document.createElement("button");
+        neitherBtn.type = "button";
+        neitherBtn.className = "secondary";
+        neitherBtn.dataset.af = "Neither";
+        neitherBtn.textContent = "Neither";
+        rateWrap.appendChild(neitherBtn);
 
-          if (bill.afPosition) {
-            const clearBtn = document.createElement("button");
-            clearBtn.type = "button";
-            clearBtn.className = "secondary";
-            clearBtn.textContent = "Clear";
-            clearBtn.dataset.action = "clear-bill";
-            actionsTd.appendChild(clearBtn);
-          }
-        } else {
-          actionsTd.textContent = "";
-        }
+        const antiBtn = document.createElement("button");
+        antiBtn.type = "button";
+        antiBtn.className = "danger";
+        antiBtn.dataset.af = "Anti-America First";
+        antiBtn.textContent = "Anti-America First";
+        rateWrap.appendChild(antiBtn);
 
-        tr.appendChild(actionsTd);
-        billTableBody.appendChild(tr);
+        rateTd.appendChild(rateWrap);
+        tr.appendChild(rateTd);
+
+        docketTableBody.appendChild(tr);
       });
     }
 
-    if (billFilterSelect) {
-      billFilterSelect.addEventListener("change", () => {
-        billFilterMode = billFilterSelect.value || "unrated";
-        renderBillTable();
-      });
-    }
+    docketTableBody.addEventListener("click", async (e) => {
+      const btn = e.target.closest("button[data-af]");
+      if (!btn) return;
+      if (!isAdmin || !token) {
+        alert("Admin login required to rate bills.");
+        return;
+      }
+      const row = btn.closest("tr");
+      if (!row) return;
+      const id = row.dataset.id;
+      const afPosition = btn.dataset.af;
 
+      const originalText = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = "Saving…";
+
+      try {
+        const res = await fetch(
+          API_BASE + "/api/admin/docket/" + encodeURIComponent(id) + "/rate",
+          {
+            method: "POST",
+            headers: authHeaders({ "Content-Type": "application/json" }),
+            body: JSON.stringify({ afPosition }),
+          }
+        );
+
+        if (res.status === 401) {
+          alert("Admin session expired. Please log in again.");
+          clearAdminSession();
+          updateAdminUI();
+          return;
+        }
+
+        if (!res.ok) {
+          const txt = await res.text();
+          console.error("Error rating bill:", res.status, txt);
+          alert("Error rating bill. See console for details.");
+          return;
+        }
+
+        const rated = await res.json();
+        console.log("Rated bill:", rated);
+
+        // Remove from local docket and re-render
+        docketBills = docketBills.filter((b) => b.id !== id);
+        renderDocket();
+
+        // Refresh members so scores update in the table immediately
+        await fetchMembers();
+      } catch (err) {
+        console.error("Network error rating bill:", err);
+        alert("Network error rating bill.");
+      } finally {
+        btn.disabled = false;
+        btn.textContent = originalText;
+      }
+    });
+
+    // --- SYNC BILLS BUTTON ---
     if (syncBillsBtn) {
       syncBillsBtn.addEventListener("click", async () => {
         if (!isAdmin || !token) {
           alert("You must be logged in as admin to sync bills.");
           return;
         }
+
         if (
           !confirm(
-            "Sync recent passed bills from Congress.gov (back to 2023) into the America First Bill Docket?"
+            "Sync recent bills from Congress.gov into the global docket (from 2023 onward)?"
           )
         ) {
           return;
         }
 
-        syncBillsBtn.disabled = true;
         const originalText = syncBillsBtn.textContent;
+        syncBillsBtn.disabled = true;
         syncBillsBtn.textContent = "Syncing…";
 
         try {
@@ -1527,26 +1639,32 @@
             method: "POST",
             headers: authHeaders({ "Content-Type": "application/json" }),
           });
-          const text = await res.text();
-          if (!res.ok) {
-            console.error("Bill sync error:", res.status, text);
-            alert("Error syncing bills:\n" + text.slice(0, 300));
-          } else {
-            let data = {};
-            try {
-              data = JSON.parse(text);
-            } catch (_) {}
-            alert(
-              `Bill sync complete.\nNew bills: ${
-                data.imported ?? "?"
-              }\nUpdated: ${data.updated ?? "?"}\nVotes processed: ${
-                data.votesProcessed ?? "?"
-              }`
-            );
-            await fetchBills();
+
+          if (res.status === 401) {
+            alert("Admin session expired. Please log in again.");
+            clearAdminSession();
+            updateAdminUI();
+            return;
           }
+
+          if (!res.ok) {
+            const txt = await res.text();
+            console.error("Sync bills failed:", res.status, txt);
+            alert("Error syncing bills. Check server logs.");
+            return;
+          }
+
+          const data = await res.json();
+          alert(
+            `Bills synced.\nInserted: ${data.inserted ?? "?"}\nUpdated: ${
+              data.updated ?? "?"
+            }\nTotal seen: ${data.total ?? "?"}`
+          );
+
+          // Reload docket to show newly imported bills
+          await loadAdminDocket();
         } catch (err) {
-          console.error("Bill sync request failed:", err);
+          console.error("Error syncing bills:", err);
           alert("Network error while syncing bills.");
         } finally {
           syncBillsBtn.disabled = false;
@@ -1555,74 +1673,14 @@
       });
     }
 
-    // bill docket row actions
-    if (billTableBody) {
-      billTableBody.addEventListener("click", async (e) => {
-        const btn = e.target.closest("button");
-        if (!btn) return;
-        const action = btn.dataset.action;
-        if (!action) return;
-
-        const row = btn.closest("tr");
-        if (!row) return;
-        const id = row.dataset.id;
-        const bill = bills.find((b) => b.id === id);
-        if (!bill) return;
-
-        if (!isAdmin || !token) {
-          alert("Admin login required.");
-          return;
-        }
-
-        const select = row.querySelector("select.bill-rating-select");
-        let newRating = select ? select.value : bill.afPosition || "";
-
-        if (action === "clear-bill") {
-          newRating = "";
-          if (select) select.value = "";
-        }
-
-        try {
-          const res = await fetch(
-            API_BASE + "/api/bills/" + encodeURIComponent(id),
-            {
-              method: "PUT",
-              headers: authHeaders({ "Content-Type": "application/json" }),
-              body: JSON.stringify({ afPosition: newRating || null }),
-            }
-          );
-          if (!res.ok) {
-            const text = await res.text();
-            console.error("Error saving bill rating:", res.status, text);
-            alert("Error saving bill rating:\n" + text.slice(0, 300));
-            return;
-          }
-          const updated = await res.json();
-          const idx = bills.findIndex((b) => b.id === id);
-          if (idx !== -1) bills[idx] = updated;
-
-          // After rating, member scores are recomputed server-side.
-          // Refresh members so table + scores reflect latest values.
-          await fetchMembers();
-          renderBillTable();
-        } catch (err) {
-          console.error("Error saving bill rating:", err);
-          alert("Network error while saving bill rating.");
-        }
-      });
-    }
-
-    // ------------- INIT -------------
-
+    // --- INIT ---
     (async function init() {
       if (token) {
+        // token might be stale server-side, but we'll treat it as admin until a 401 tells us otherwise
         isAdmin = true;
       }
       updateAdminUI();
       await fetchMembers();
-      if (isAdmin) {
-        await fetchBills();
-      }
     })();
   </script>
 </body>
