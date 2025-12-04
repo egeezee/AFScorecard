@@ -60,7 +60,6 @@ async function recomputeScoresForMember(memberId) {
     const vote = row.vote;
 
     if (!afPos || afPos === "Neither") continue;
-
     if (vote !== "Approved" && vote !== "Opposed") continue;
 
     const aligned =
@@ -117,15 +116,12 @@ function requireAdmin(req, res, next) {
     return next();
   }
 
-  // NEW: log why it's failing
-  console.warn(
-    "[requireAdmin] Unauthorized request",
-    {
-      path: req.path,
-      hasAuthHeader: !!req.headers.authorization,
-      tokenSnippet: token ? token.slice(0, 8) + "..." : null,
-    }
-  );
+  // helpful logging when something hits an admin route without auth
+  console.warn("[requireAdmin] Unauthorized request", {
+    path: req.path,
+    hasAuthHeader: !!req.headers.authorization,
+    tokenSnippet: token ? token.slice(0, 8) + "..." : null,
+  });
 
   return res.status(401).json({ error: "Unauthorized" });
 }
@@ -149,6 +145,7 @@ async function initDb() {
     );
   `);
 
+  // in case the table was created before bioguide_id existed
   await pool.query(`
     ALTER TABLE politicians
     ADD COLUMN IF NOT EXISTS bioguide_id TEXT UNIQUE;
@@ -260,7 +257,8 @@ async function fetchAllCurrentMembersFromCongressGov() {
     }
 
     const data = await res.json();
-    const members = data.members || [];
+    // API returns array under "members", sometimes each item has a nested "member" object
+    const members = (data.members || []).map((item) => item.member || item);
     all = all.concat(members);
 
     const pagination = data.pagination || {};
@@ -277,19 +275,35 @@ async function fetchAllCurrentMembersFromCongressGov() {
 function normalizeCongressMembers(rawMembers) {
   const normalized = rawMembers
     .map((m) => {
-      const bioguideId = m.bioguideId || null;
+      // bioguide id
+      const bioguideId = m.bioguideId || m.bioguide_id || null;
+
+      // name
       const fullName =
         m.fullName ||
-        [m.firstName, m.lastName].filter(Boolean).join(" ") ||
+        m.directOrderName ||
+        [m.firstName || m.first_name, m.lastName || m.last_name]
+          .filter(Boolean)
+          .join(" ") ||
         null;
 
-      let chamber = m.chamber || null;
+      // latest status usually carries current chamber/state/party
+      const latest = m.latestStatus || m.latest_status || {};
+
+      let chamber = latest.chamber || m.chamber || null;
       if (chamber === "House of Representatives") chamber = "House";
 
-      let state = m.state || null;
+      let state = latest.state || m.state || null;
       if (state) state = state.toUpperCase();
 
-      let party = m.party || null;
+      const partyName =
+        latest.partyName ||
+        latest.party ||
+        m.partyName ||
+        m.party ||
+        null;
+
+      let party = partyName;
       if (party) {
         const p = party.toLowerCase();
         if (p.startsWith("republican")) party = "R";
@@ -517,8 +531,6 @@ async function syncRecentBillsIntoDb() {
       );
 
       if (existing.rows.length > 0) {
-        const row = existing.rows[0];
-        // only lightly update to avoid clobbering admin edits
         await client.query(
           `
           UPDATE bills
@@ -744,10 +756,9 @@ async function syncVotesForBill(billId) {
     await recomputeScoresForMember(memberId);
   }
 
-  await pool.query(
-    "UPDATE bills SET votes_synced = TRUE WHERE id = $1",
-    [billRow.id]
-  );
+  await pool.query("UPDATE bills SET votes_synced = TRUE WHERE id = $1", [
+    billRow.id,
+  ]);
 }
 
 // ===================
@@ -1474,31 +1485,37 @@ app.post("/api/members/:id/bills", requireAdmin, async (req, res) => {
 });
 
 // remove a bill from a single member's record (admin)
-app.delete("/api/members/:id/bills/:billId", requireAdmin, async (req, res) => {
-  const { id: memberId, billId } = req.params;
+app.delete(
+  "/api/members/:id/bills/:billId",
+  requireAdmin,
+  async (req, res) => {
+    const { id: memberId, billId } = req.params;
 
-  try {
-    const result = await pool.query(
-      `
-      DELETE FROM member_votes
-      WHERE member_id = $1 AND bill_id = $2
-      RETURNING id;
-    `,
+    try {
+      const result = await pool.query(
+        `
+        DELETE FROM member_votes
+        WHERE member_id = $1 AND bill_id = $2
+        RETURNING id;
+      `,
       [memberId, billId]
-    );
+      );
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: "Vote not found for this member/bill" });
+      if (result.rows.length === 0) {
+        return res
+          .status(404)
+          .json({ error: "Vote not found for this member/bill" });
+      }
+
+      await recomputeScoresForMember(memberId);
+
+      res.json({ success: true });
+    } catch (err) {
+      console.error("Error deleting member vote:", err);
+      res.status(500).json({ error: "Server error" });
     }
-
-    await recomputeScoresForMember(memberId);
-
-    res.json({ success: true });
-  } catch (err) {
-    console.error("Error deleting member vote:", err);
-    res.status(500).json({ error: "Server error" });
   }
-});
+);
 
 // --- start ---
 const PORT = process.env.PORT || 3000;
