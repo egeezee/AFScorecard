@@ -17,10 +17,15 @@ const CONGRESS_API_KEY =
   process.env.CONGRESS_API_KEY ||
   "NUtl5kWwSI4bWZKgjAbWxwALpFfL3gHWFPrwh0P0";
 
-// update when 119th Congress truly “current”
+// 119th Congress is treated as "current"
 const CURRENT_CONGRESS = 119;
-// don't import bills older than this
-const BILL_IMPORT_CUTOFF = new Date("2023-01-01T00:00:00Z");
+
+// Minimum congress we want to import bills from (inclusive)
+// 117th Congress = Jan 2021–Jan 2023
+const MIN_BILL_CONGRESS = 117;
+
+// Don't import bills older than this date (acts as a safety cutoff)
+const BILL_IMPORT_CUTOFF = new Date("2021-01-01T00:00:00Z");
 
 if (!DATABASE_URL) {
   console.error("DATABASE_URL is not set. Please add it in Render environment.");
@@ -569,14 +574,14 @@ function normalizeCongressBill(apiBill) {
   const b = apiBill.bill || apiBill;
 
   const congressRaw =
-    b.congress ?? b.congressNumber ?? b.congressNum ?? null;
+    b.congress ?? b.congressNumber ?? b.congressNum ?? apiBill.congress ?? null;
   const congress = congressRaw ? parseInt(congressRaw, 10) : null;
 
-  const billTypeRaw = b.type ?? b.billType ?? null;
-  const billNumberRaw = b.number ?? b.billNumber ?? null;
+  const billTypeRaw = b.type ?? b.billType ?? apiBill.billType ?? null;
+  const billNumberRaw = b.number ?? b.billNumber ?? apiBill.billNumber ?? null;
   const billNumber = billNumberRaw ? parseInt(billNumberRaw, 10) : null;
 
-  // We need these three to build vote URLs and dedupe
+  // We need these three to identify the bill + hit votes endpoint
   if (!congress || !billTypeRaw || !billNumber) {
     return null;
   }
@@ -646,56 +651,81 @@ async function fetchRecentBillsFromCongressGov() {
 
   const baseUrl = "https://api.congress.gov/v3/bill";
   const limit = 50;
-  let offset = 0;
-  const maxPages = 30; // up to 1500 bills
+  const maxPagesPerCongress = 20; // up to ~1000 bills per congress
   const results = [];
-  let stop = false;
 
-  for (let page = 0; page < maxPages && !stop; page++) {
-    const url = new URL(baseUrl);
-    url.searchParams.set("api_key", CONGRESS_API_KEY);
-    url.searchParams.set("format", "json");
-    url.searchParams.set("limit", String(limit));
-    url.searchParams.set("offset", String(offset));
-    url.searchParams.set("sort", "latestActionDate+desc");
+  // Loop from CURRENT_CONGRESS down to MIN_BILL_CONGRESS
+  for (let congress = CURRENT_CONGRESS; congress >= MIN_BILL_CONGRESS; congress--) {
+    let offset = 0;
+    let stopThisCongress = false;
 
-    // 👇 NEW: explicitly ask for the current Congress
-    if (CURRENT_CONGRESS) {
-      url.searchParams.set("congress", String(CURRENT_CONGRESS));
-    }
+    console.log(`[bill-sync] starting congress ${congress}`);
 
-    const res = await fetch(url);
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(
-        `Congress.gov bill request failed: ${res.status} – ${text.slice(0, 200)}`
-      );
-    }
+    for (let page = 0; page < maxPagesPerCongress && !stopThisCongress; page++) {
+      const url = new URL(baseUrl);
+      url.searchParams.set("api_key", CONGRESS_API_KEY);
+      url.searchParams.set("format", "json");
+      url.searchParams.set("limit", String(limit));
+      url.searchParams.set("offset", String(offset));
+      url.searchParams.set("sort", "latestActionDate+desc");
+      url.searchParams.set("congress", String(congress)); // ← key change
 
-    const data = await res.json();
-    const apiBills = data.bills || [];
-    if (!apiBills.length) break;
+      const res = await fetch(url);
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(
+          `Congress.gov bill request failed: ${res.status} – ${text.slice(0, 200)}`
+        );
+      }
 
-    if (page === 0 && apiBills.length) {
-      console.log("[bill-sync] first raw bill sample:", apiBills[0]);
-    }
-
-    for (const apiBill of apiBills) {
-      const normalized = normalizeCongressBill(apiBill);
-      if (!normalized) continue;
-
-      // stop once we hit bills before cutoff
-      if (normalized.billDate && normalized.billDate < BILL_IMPORT_CUTOFF) {
-        stop = true;
+      const data = await res.json();
+      const apiBills = data.bills || [];
+      if (!apiBills.length) {
+        console.log(
+          `[bill-sync] congress ${congress} page ${page}: no bills, stopping`
+        );
         break;
       }
 
-      results.push(normalized);
+      if (page === 0 && apiBills.length) {
+        console.log(
+          `[bill-sync] congress ${congress} first raw bill sample:`,
+          apiBills[0]
+        );
+      }
+
+      for (const apiBill of apiBills) {
+        const normalized = normalizeCongressBill(apiBill);
+        if (!normalized) continue;
+
+        // Safety cutoff by date – will never chop 117+ with 2021 cutoff
+        if (normalized.billDate && normalized.billDate < BILL_IMPORT_CUTOFF) {
+          stopThisCongress = true;
+          console.log(
+            `[bill-sync] congress ${congress} hit cutoff at date ${normalized.billDate.toISOString()}`
+          );
+          break;
+        }
+
+        results.push(normalized);
+      }
+
+      const pagination = data.pagination || {};
+      offset += limit;
+      if (!pagination.next) {
+        console.log(
+          `[bill-sync] congress ${congress} page ${page}: no next page`
+        );
+        break;
+      }
     }
 
-    const pagination = data.pagination || {};
-    offset += limit;
-    if (!pagination.next) break;
+    const countForCongress = results.filter(
+      (b) => Number(b.congress) === Number(congress)
+    ).length;
+    console.log(
+      `[bill-sync] congress ${congress} collected so far: ${countForCongress} bills`
+    );
   }
 
   if (results.length) {
