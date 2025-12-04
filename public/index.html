@@ -219,7 +219,7 @@
       display: flex;
       flex-wrap: wrap;
       gap: 0.3rem;
-      justify-content: center; /* center the View button under header */
+      justify-content: center;
       align-items: center;
     }
 
@@ -583,6 +583,23 @@
       <div class="card-header">
         <h2>America First Bill Docket</h2>
         <div class="controls">
+          <!-- NEW: docket filters & page size -->
+          <select id="docketCongressFilter">
+            <option value="">All Congresses</option>
+            <option value="118">118th Congress</option>
+            <option value="117">117th Congress</option>
+            <option value="116">116th Congress</option>
+          </select>
+          <select id="docketHasVotesFilter">
+            <option value="">All Bills</option>
+            <option value="true">Has votes</option>
+            <option value="false">No votes yet</option>
+          </select>
+          <select id="docketPageSize">
+            <option value="25">25 per page</option>
+            <option value="50" selected>50 per page</option>
+            <option value="100">100 per page</option>
+          </select>
           <button id="syncBillsBtn" style="display:none;">
             Sync Recent Bills
           </button>
@@ -611,6 +628,9 @@
           <tbody id="docketTableBody"></tbody>
         </table>
       </div>
+
+      <!-- NEW: docket pagination -->
+      <div class="pagination" id="docketPagination"></div>
 
       <p class="footnote" id="docketStatus">
         Admin only area. Log in as admin to view unrated bills.
@@ -654,8 +674,15 @@
     let draggedId = null;
     const pendingImageData = {};
 
-    // Bill docket state
-    let docketBills = [];
+    // NEW: docket pagination/filter state
+    const docketState = {
+      page: 1,
+      pageSize: 50,
+      congress: "",
+      hasVotes: "",
+      total: 0,
+      totalPages: 1,
+    };
 
     // DOM refs
     const tbody = document.getElementById("memberTableBody");
@@ -678,6 +705,10 @@
     const syncBillsBtn = document.getElementById("syncBillsBtn");
     const docketTableBody = document.getElementById("docketTableBody");
     const docketStatus = document.getElementById("docketStatus");
+    const docketPagination = document.getElementById("docketPagination");
+    const docketCongressFilter = document.getElementById("docketCongressFilter");
+    const docketHasVotesFilter = document.getElementById("docketHasVotesFilter");
+    const docketPageSizeSelect = document.getElementById("docketPageSize");
 
     function authHeaders(extra = {}) {
       const headers = { ...extra };
@@ -700,7 +731,7 @@
         if (syncMembersBtn) syncMembersBtn.style.display = "inline-block";
         if (syncBillsBtn) syncBillsBtn.style.display = "inline-block";
         if (billDocketCard) billDocketCard.style.display = "block";
-        loadAdminDocket();
+        loadAdminDocket(true);
       } else {
         adminStatus.textContent = "Viewer";
         adminToggleBtn.textContent = "Admin Login";
@@ -710,8 +741,8 @@
         if (syncBillsBtn) syncBillsBtn.style.display = "none";
         if (billDocketCard) billDocketCard.style.display = "none";
         editingId = null;
-        docketBills = [];
         if (docketTableBody) docketTableBody.innerHTML = "";
+        if (docketPagination) docketPagination.innerHTML = "";
         if (docketStatus) docketStatus.textContent = "Admin only area. Log in as admin to view unrated bills.";
       }
       renderTable();
@@ -1405,13 +1436,46 @@
 
     // --- BILL DOCKET (ADMIN ONLY) ---
 
-    async function loadAdminDocket() {
+    // filters -> update state + reload
+    if (docketCongressFilter) {
+      docketCongressFilter.addEventListener("change", () => {
+        docketState.congress = docketCongressFilter.value;
+        docketState.page = 1;
+        loadAdminDocket(true);
+      });
+    }
+    if (docketHasVotesFilter) {
+      docketHasVotesFilter.addEventListener("change", () => {
+        docketState.hasVotes = docketHasVotesFilter.value;
+        docketState.page = 1;
+        loadAdminDocket(true);
+      });
+    }
+    if (docketPageSizeSelect) {
+      docketPageSizeSelect.addEventListener("change", () => {
+        const size = parseInt(docketPageSizeSelect.value, 10) || 50;
+        docketState.pageSize = size;
+        docketState.page = 1;
+        loadAdminDocket(true);
+      });
+    }
+
+    async function loadAdminDocket(showLoadingText = true) {
       if (!isAdmin || !token) return;
-      if (docketStatus) docketStatus.textContent = "Loading docket…";
+
+      if (showLoadingText && docketStatus) {
+        docketStatus.textContent = "Loading docket…";
+      }
+
+      const params = new URLSearchParams();
+      params.set("page", docketState.page);
+      params.set("pageSize", docketState.pageSize);
+      if (docketState.congress) params.set("congress", docketState.congress);
+      if (docketState.hasVotes) params.set("hasVotes", docketState.hasVotes);
 
       try {
         const res = await fetch(
-          API_BASE + "/api/admin/docket?limit=200",
+          API_BASE + "/api/admin/docket?" + params.toString(),
           { headers: authHeaders() }
         );
 
@@ -1426,36 +1490,54 @@
           const txt = await res.text();
           console.error("Error loading docket:", res.status, txt);
           if (docketStatus) docketStatus.textContent = "Error loading docket bills.";
+          if (docketPagination) docketPagination.innerHTML = "";
           return;
         }
 
-        docketBills = await res.json();
-        renderDocket();
+        const data = await res.json();
+
+        // Backward-compatible: if server returns plain array
+        if (Array.isArray(data)) {
+          docketState.total = data.length;
+          docketState.totalPages = 1;
+          renderDocket(data);
+        } else {
+          docketState.page = data.page ?? docketState.page;
+          docketState.pageSize = data.pageSize ?? docketState.pageSize;
+          docketState.total = data.total ?? (data.items ? data.items.length : 0);
+          docketState.totalPages = data.totalPages ?? 1;
+          renderDocket(data.items || []);
+        }
       } catch (err) {
         console.error("Network error loading docket:", err);
         if (docketStatus) docketStatus.textContent = "Network error loading docket.";
+        if (docketPagination) docketPagination.innerHTML = "";
       }
     }
 
-    function renderDocket() {
+    function renderDocket(items) {
       if (!docketTableBody) return;
       docketTableBody.innerHTML = "";
 
       if (!isAdmin || !token) {
         if (docketStatus)
           docketStatus.textContent = "Admin only area. Log in as admin to view unrated bills.";
+        if (docketPagination) docketPagination.innerHTML = "";
         return;
       }
 
-      if (!docketBills.length) {
+      if (!items || !items.length) {
         if (docketStatus) docketStatus.textContent = "No unrated bills at the moment.";
+        if (docketPagination) docketPagination.innerHTML = "";
         return;
       }
 
-      if (docketStatus)
-        docketStatus.textContent = `${docketBills.length} unrated bill(s) in the docket.`;
+      if (docketStatus) {
+        docketStatus.textContent =
+          `${docketState.total || items.length} unrated bill(s) match the current filters.`;
+      }
 
-      docketBills.forEach((b) => {
+      items.forEach((b) => {
         const tr = document.createElement("tr");
         tr.dataset.id = b.id;
 
@@ -1554,6 +1636,60 @@
 
         docketTableBody.appendChild(tr);
       });
+
+      renderDocketPagination();
+    }
+
+    function renderDocketPagination() {
+      if (!docketPagination) return;
+      docketPagination.innerHTML = "";
+
+      if (!isAdmin || !token || !docketState.total) return;
+
+      const total = docketState.total;
+      const page = docketState.page;
+      const pageSize = docketState.pageSize;
+      const totalPages = Math.max(1, docketState.totalPages || Math.ceil(total / pageSize));
+
+      const start = (page - 1) * pageSize + 1;
+      const end = Math.min(total, page * pageSize);
+
+      const infoSpan = document.createElement("span");
+      infoSpan.textContent = `Showing ${start}-${end} of ${total}`;
+      docketPagination.appendChild(infoSpan);
+
+      const controls = document.createElement("div");
+      controls.style.display = "flex";
+      controls.style.gap = "0.3rem";
+      controls.style.alignItems = "center";
+
+      const prevBtn = document.createElement("button");
+      prevBtn.textContent = "Prev";
+      prevBtn.disabled = page <= 1;
+      prevBtn.onclick = () => {
+        if (docketState.page > 1) {
+          docketState.page--;
+          loadAdminDocket(false);
+        }
+      };
+      controls.appendChild(prevBtn);
+
+      const pageLabel = document.createElement("span");
+      pageLabel.textContent = `Page ${page} of ${totalPages}`;
+      controls.appendChild(pageLabel);
+
+      const nextBtn = document.createElement("button");
+      nextBtn.textContent = "Next";
+      nextBtn.disabled = page >= totalPages;
+      nextBtn.onclick = () => {
+        if (docketState.page < totalPages) {
+          docketState.page++;
+          loadAdminDocket(false);
+        }
+      };
+      controls.appendChild(nextBtn);
+
+      docketPagination.appendChild(controls);
     }
 
     docketTableBody.addEventListener("click", async (e) => {
@@ -1599,9 +1735,8 @@
         const rated = await res.json();
         console.log("Rated bill:", rated);
 
-        // Remove from local docket and re-render
-        docketBills = docketBills.filter((b) => b.id !== id);
-        renderDocket();
+        // Reload current docket page (this bill should disappear)
+        await loadAdminDocket(false);
 
         // Refresh members so scores update in the table immediately
         await fetchMembers();
@@ -1662,7 +1797,7 @@
           );
 
           // Reload docket to show newly imported bills
-          await loadAdminDocket();
+          await loadAdminDocket(true);
         } catch (err) {
           console.error("Error syncing bills:", err);
           alert("Network error while syncing bills.");
