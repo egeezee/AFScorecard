@@ -273,62 +273,99 @@ async function fetchAllCurrentMembersFromCongressGov() {
 }
 
 function normalizeCongressMembers(rawMembers) {
-  const normalized = rawMembers
-    .map((m) => {
-      // IMPORTANT: handle nested `member` objects and multiple field names
-      const base = m.member || m;
+  if (!Array.isArray(rawMembers)) {
+    console.log("normalizeCongressMembers: rawMembers is not an array");
+    return [];
+  }
 
-      const bioguideId =
-        base.bioguideId ||
-        base.bioguide_id ||
-        (base.identifiers && base.identifiers.bioguideId) ||
-        null;
+  const normalized = rawMembers.map((m) => {
+    // bioguideId is the key piece for wiring votes -> politicians
+    const bioguideId =
+      m.bioguideId ||
+      m.bioGuideId ||
+      (m.identifiers && (m.identifiers.bioguideId || m.identifiers.bioGuideId)) ||
+      (m.member && (m.member.bioguideId || m.member.bioGuideId)) ||
+      null;
 
-      const fullName =
-        base.fullName ||
-        [base.firstName, base.lastName].filter(Boolean).join(" ") ||
-        null;
+    // Name
+    const first =
+      m.firstName ||
+      m.first_name ||
+      (m.name && (m.name.first || m.name.given)) ||
+      m.givenName ||
+      "";
+    const last =
+      m.lastName ||
+      m.last_name ||
+      (m.name && (m.name.last || m.name.surname)) ||
+      m.familyName ||
+      "";
 
-      let chamber = base.chamber || base.office || null;
-      if (chamber === "House of Representatives") chamber = "House";
+    let fullName =
+      m.fullName ||
+      m.name ||
+      [first, last].filter(Boolean).join(" ").trim() ||
+      null;
 
-      let state =
-        base.state ||
-        base.stateCode ||
-        (base.district && base.district.stateCode) ||
-        null;
-      if (state) state = state.toUpperCase();
+    // Chamber
+    let chamber =
+      m.chamber ||
+      (m.roles && m.roles[0] && m.roles[0].chamber) ||
+      (m.terms && m.terms[0] && m.terms[0].chamber) ||
+      null;
 
-      let party =
-        base.party ||
-        base.partyName ||
-        (base.parties && base.parties[0] && base.parties[0].name) ||
-        null;
-      if (party) {
-        const p = party.toLowerCase();
-        if (p.startsWith("republican")) party = "R";
-        else if (p.startsWith("democrat")) party = "D";
-        else if (p.startsWith("independent")) party = "I";
-      }
+    if (typeof chamber === "string") {
+      const c = chamber.toLowerCase();
+      if (c.includes("house")) chamber = "House";
+      else if (c.includes("senate")) chamber = "Senate";
+    }
 
-      return { bioguideId, name: fullName, chamber, state, party };
-    })
-    .filter(
-      (m) =>
-        m.bioguideId &&
-        m.name &&
-        m.chamber &&
-        m.state &&
-        m.party
-    );
+    // State
+    let state =
+      m.state ||
+      m.stateCode ||
+      (m.roles && m.roles[0] && m.roles[0].state) ||
+      (m.terms && m.terms[0] && m.terms[0].state) ||
+      null;
+    if (state) state = String(state).toUpperCase();
+
+    // Party
+    let party =
+      m.party ||
+      m.partyName ||
+      m.partyAffiliation ||
+      (m.roles && m.roles[0] && (m.roles[0].party || m.roles[0].partyName)) ||
+      (m.terms && m.terms[0] && (m.terms[0].party || m.terms[0].partyName)) ||
+      null;
+
+    if (party) {
+      const p = party.toLowerCase();
+      if (p.startsWith("republican")) party = "R";
+      else if (p.startsWith("democrat")) party = "D";
+      else if (p.startsWith("independent")) party = "I";
+      else party = party.toUpperCase();
+    }
+
+    return {
+      bioguideId,
+      name: fullName,
+      chamber,
+      state,
+      party,
+    };
+  });
+
+  // Only REQUIRE bioguide + name. Let chamber/state/party be null if API is weird.
+  const filtered = normalized.filter((m) => m.bioguideId && m.name);
 
   console.log(
     "Congress sync: usable normalized members:",
-    normalized.length,
+    filtered.length,
     "sample:",
-    normalized[0]
+    filtered[0]
   );
-  return normalized;
+
+  return filtered;
 }
 
 
