@@ -17,7 +17,7 @@ const CONGRESS_API_KEY =
   process.env.CONGRESS_API_KEY ||
   "NUtl5kWwSI4bWZKgjAbWxwALpFfL3gHWFPrwh0P0";
 
-// hard-coded for now; update when 119th Congress starts
+// update when 119th Congress truly “current”
 const CURRENT_CONGRESS = 118;
 // don't import bills older than this
 const BILL_IMPORT_CUTOFF = new Date("2023-01-01T00:00:00Z");
@@ -35,98 +35,11 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false },
 });
 
-// ========================
-//  SCORE RECOMPUTE HELPER
-// ========================
-async function recomputeScoresForMember(memberId) {
-  const { rows } = await pool.query(
-    `
-    SELECT
-      b.af_position AS "afPosition",
-      mv.vote,
-      mv.is_current_congress AS "isCurrent"
-    FROM member_votes mv
-    JOIN bills b ON mv.bill_id = b.id
-    WHERE mv.member_id = $1
-  `,
-    [memberId]
-  );
+// -----------------------------
+//   STATE NORMALIZATION
+// -----------------------------
 
-  let lifetimeCorrect = 0;
-  let lifetimeTotal = 0;
-  let currentCorrect = 0;
-  let currentTotal = 0;
-
-  for (const row of rows) {
-    const afPos = row.afPosition;
-    const vote = row.vote;
-
-    if (!afPos || afPos === "Neither") continue;
-    if (vote !== "Approved" && vote !== "Opposed") continue;
-
-    const aligned =
-      (afPos === "America First" && vote === "Approved") ||
-      (afPos === "Anti-America First" && vote === "Opposed");
-
-    lifetimeTotal++;
-    if (aligned) lifetimeCorrect++;
-
-    if (row.isCurrent) {
-      currentTotal++;
-      if (aligned) currentCorrect++;
-    }
-  }
-
-  const lifetimeScore =
-    lifetimeTotal > 0 ? (lifetimeCorrect / lifetimeTotal) * 100 : null;
-  const currentScore =
-    currentTotal > 0 ? (currentCorrect / currentTotal) * 100 : null;
-
-  await pool.query(
-    `
-    UPDATE politicians
-    SET lifetime_score = $2, current_score = $3
-    WHERE id = $1
-  `,
-    [memberId, lifetimeScore, currentScore]
-  );
-}
-
-// ============
-//  MIDDLEWARE
-// ============
-app.use(cors());
-app.use(express.json({ limit: "5mb" })); // allow image data URLs
-
-// static files
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-app.use(express.static(path.join(__dirname, "public")));
-
-// simple in-memory token store (admin sessions)
-const adminTokens = new Set();
-
-function requireAdmin(req, res, next) {
-  const auth = req.headers.authorization || "";
-  const token = auth.startsWith("Bearer ") ? auth.slice("Bearer ".length) : null;
-
-  if (token && adminTokens.has(token)) {
-    return next();
-  }
-
-  console.warn("[requireAdmin] Unauthorized request", {
-    path: req.path,
-    hasAuthHeader: !!req.headers.authorization,
-    tokenSnippet: token ? token.slice(0, 8) + "..." : null,
-  });
-
-  return res.status(401).json({ error: "Unauthorized" });
-}
-
-// =========================
-//  STATE NORMALIZATION
-// =========================
-
+// Full state name -> 2-letter postal code
 const STATE_NAME_TO_ABBR = {
   ALABAMA: "AL",
   ALASKA: "AK",
@@ -188,12 +101,13 @@ function normalizeState(rawState) {
     let val = rawState.trim();
     if (!val) return null;
 
+    // Already two-letter code?
     if (val.length === 2) {
       return val.toUpperCase();
     }
 
     const upper = val.toUpperCase();
-    const base = upper.split("(")[0].trim(); // strip " (At Large)" etc
+    const base = upper.split("(")[0].trim(); // strip "(At Large)" etc
 
     if (base.length === 2) {
       return base;
@@ -207,11 +121,117 @@ function normalizeState(rawState) {
   return null;
 }
 
-// ================
-//  DB BOOTSTRAP
-// ================
+// -----------------------------
+//   SCORE RECOMPUTE
+// -----------------------------
+
+async function recomputeScoresForMember(memberId) {
+  const { rows } = await pool.query(
+    `
+    SELECT
+      b.af_position AS "afPosition",
+      mv.vote,
+      mv.is_current_congress AS "isCurrent"
+    FROM member_votes mv
+    JOIN bills b ON mv.bill_id = b.id
+    WHERE mv.member_id = $1
+  `,
+    [memberId]
+  );
+
+  let lifetimeCorrect = 0;
+  let lifetimeTotal = 0;
+  let currentCorrect = 0;
+  let currentTotal = 0;
+
+  for (const row of rows) {
+    const afPos = row.afPosition;
+    const vote = row.vote;
+
+    if (!afPos || afPos === "Neither") continue;
+    if (vote !== "Approved" && vote !== "Opposed") continue;
+
+    const aligned =
+      (afPos === "America First" && vote === "Approved") ||
+      (afPos === "Anti-America First" && vote === "Opposed");
+
+    lifetimeTotal++;
+    if (aligned) lifetimeCorrect++;
+
+    if (row.isCurrent) {
+      currentTotal++;
+      if (aligned) currentCorrect++;
+    }
+  }
+
+  const lifetimeScore =
+    lifetimeTotal > 0 ? (lifetimeCorrect / lifetimeTotal) * 100 : null;
+  const currentScore =
+    currentTotal > 0 ? (currentCorrect / currentTotal) * 100 : null;
+
+  await pool.query(
+    `
+    UPDATE politicians
+    SET lifetime_score = $2, current_score = $3
+    WHERE id = $1
+  `,
+    [memberId, lifetimeScore, currentScore]
+  );
+}
+
+// -----------------------------
+//   EXPRESS + STATIC
+// -----------------------------
+
+app.use(cors());
+app.use(express.json({ limit: "5mb" })); // allow image data URLs
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+app.use(express.static(path.join(__dirname, "public")));
+
+// -----------------------------
+//   ADMIN AUTH
+// -----------------------------
+
+const adminTokens = new Set();
+
+function requireAdmin(req, res, next) {
+  const auth = req.headers.authorization || "";
+  const token = auth.startsWith("Bearer ") ? auth.slice("Bearer ".length) : null;
+
+  if (token && adminTokens.has(token)) {
+    return next();
+  }
+
+  console.warn("[requireAdmin] Unauthorized request", {
+    path: req.path,
+    hasAuthHeader: !!req.headers.authorization,
+    tokenSnippet: token ? token.slice(0, 8) + "..." : null,
+  });
+
+  return res.status(401).json({ error: "Unauthorized" });
+}
+
+app.post("/api/login", (req, res) => {
+  const { password } = req.body || {};
+  if (!password) {
+    return res.status(400).json({ error: "Password required" });
+  }
+  if (password !== ADMIN_PASSWORD) {
+    return res.status(401).json({ error: "Invalid password" });
+  }
+  const token = crypto.randomUUID();
+  adminTokens.add(token);
+  res.json({ token });
+});
+
+// -----------------------------
+//   DB BOOTSTRAP
+// -----------------------------
+
 async function initDb() {
-  // politicians
+  // politicians table
   await pool.query(`
     CREATE TABLE IF NOT EXISTS politicians (
       id UUID PRIMARY KEY,
@@ -233,7 +253,7 @@ async function initDb() {
     ADD COLUMN IF NOT EXISTS bioguide_id TEXT UNIQUE;
   `);
 
-  // global bills
+  // global bills table
   await pool.query(`
     CREATE TABLE IF NOT EXISTS bills (
       id UUID PRIMARY KEY,
@@ -285,7 +305,7 @@ async function initDb() {
     ADD COLUMN IF NOT EXISTS is_current_congress BOOLEAN DEFAULT FALSE;
   `);
 
-  // seed sample if empty
+  // Seed example politicians if empty
   const { rows } = await pool.query("SELECT COUNT(*) AS count FROM politicians");
   const count = parseInt(rows[0].count, 10);
   if (count === 0) {
@@ -305,12 +325,14 @@ async function initDb() {
   }
 }
 
-// =======================
-//  CONGRESS.GOV - MEMBERS
-// =======================
+// -----------------------------
+//   CONGRESS.GOV MEMBERS
+// -----------------------------
 
 async function fetchAllCurrentMembersFromCongressGov() {
-  if (!CONGRESS_API_KEY) throw new Error("CONGRESS_API_KEY is missing");
+  if (!CONGRESS_API_KEY) {
+    throw new Error("CONGRESS_API_KEY is missing");
+  }
 
   const baseUrl = "https://api.congress.gov/v3/member";
   const limit = 250;
@@ -345,111 +367,84 @@ async function fetchAllCurrentMembersFromCongressGov() {
   }
 
   console.log("Congress sync: fetched", all.length, "raw members.");
-  if (all.length && all[0]) {
-    console.log(
-      "Congress raw[0] keys:",
-      Object.keys(all[0]).slice(0, 15)
-    );
-  }
   return all;
 }
 
 function normalizeCongressMembers(rawMembers) {
-  if (!Array.isArray(rawMembers) || rawMembers.length === 0) {
-    console.log("Congress sync: no members to normalize");
-    return [];
-  }
+  const mapped = rawMembers.map((m) => {
+    const bioguideId = m.bioguideId || null;
 
-  const normalized = rawMembers
-    .map((m, idx) => {
-      const bioguideId =
-        m.bioguideId ||
-        (m.identifiers &&
-          (m.identifiers.bioguideId || m.identifiers.bioguide)) ||
-        null;
+    const name =
+      m.fullName ||
+      [m.firstName, m.lastName].filter(Boolean).join(" ") ||
+      null;
 
-      const fullName =
-        m.name ||
-        m.fullName ||
-        [m.firstName, m.middleName, m.lastName].filter(Boolean).join(" ") ||
-        null;
+    const rawState =
+      m.stateCode ||
+      (typeof m.state === "string" ? m.state : null) ||
+      (m.state && (m.state.code || m.state.postal)) ||
+      (m.roles && m.roles[0] && (m.roles[0].state || m.roles[0].stateCode)) ||
+      null;
 
-      const rawState =
-        m.stateCode ||
-        (typeof m.state === "string" ? m.state : null) ||
-        (m.state && (m.state.code || m.state.postal || m.state.name)) ||
-        (Array.isArray(m.roles) &&
-          m.roles[0] &&
-          (m.roles[0].state || m.roles[0].stateCode)) ||
-        null;
+    const state = normalizeState(rawState);
 
-      const state = normalizeState(rawState);
+    let partyRaw =
+      m.party ||
+      (m.roles && m.roles[0] && m.roles[0].party) ||
+      (m.terms && m.terms[0] && m.terms[0].party) ||
+      null;
 
-      let partyRaw =
-        m.party ||
-        m.partyName ||
-        (m.currentParty &&
-          (m.currentParty.name || m.currentParty.partyName)) ||
-        (Array.isArray(m.parties) &&
-          m.parties[0] &&
-          (m.parties[0].name || m.parties[0].partyName)) ||
-        null;
+    let party = null;
+    if (partyRaw) {
+      const p = String(partyRaw).toLowerCase();
+      if (p.startsWith("republican")) party = "R";
+      else if (p.startsWith("democrat")) party = "D";
+      else if (p.startsWith("independent")) party = "I";
+      else party = String(partyRaw).toUpperCase().slice(0, 3);
+    }
 
-      let party = null;
-      if (typeof partyRaw === "string") {
-        const p = partyRaw.toLowerCase();
-        if (p.includes("republican")) party = "R";
-        else if (p.includes("democrat")) party = "D";
-        else if (p.includes("independent")) party = "I";
-        else party = partyRaw.toUpperCase().slice(0, 3);
-      }
-      if (!party) party = "U"; // Unknown
+    let chamber =
+      m.chamber ||
+      (m.roles && m.roles[0] && m.roles[0].chamber) ||
+      (m.terms && m.terms[0] && m.terms[0].chamber) ||
+      null;
 
-      let chamber =
-        m.chamber ||
-        (Array.isArray(m.roles) && m.roles[0] && m.roles[0].chamber) ||
-        (Array.isArray(m.terms) && m.terms[0] && m.terms[0].chamber) ||
-        null;
+    if (chamber) {
+      const lc = String(chamber).toLowerCase();
+      if (lc.includes("house")) chamber = "House";
+      else if (lc.includes("senate")) chamber = "Senate";
+    }
 
-      if (typeof chamber === "string") {
-        const lc = chamber.toLowerCase();
-        if (lc.includes("house")) chamber = "House";
-        else if (lc.includes("senate")) chamber = "Senate";
-      }
+    return {
+      bioguideId,
+      name,
+      state,
+      party,
+      chamber,
+    };
+  });
 
-      if (idx < 25) {
-        console.log("[normalizeCongressMembers] sample", idx, {
-          bioguideId,
-          name: fullName,
-          rawState,
-          state,
-          party,
-          chamber,
-        });
-      }
-
-      if (!bioguideId || !fullName || !state) {
-        return null;
-      }
-
-      return {
-        bioguideId,
-        name: fullName,
-        state,
-        party,
-        chamber,
-      };
-    })
-    .filter(Boolean);
-
-  console.log(
-    "Congress sync: usable normalized members:",
-    normalized.length,
-    "sample:",
-    normalized[0]
+  // Debug samples so you can see what we're getting
+  mapped.slice(0, 25).forEach((m) =>
+    console.log("[normalizeCongressMembers] sample", m)
   );
 
-  return normalized;
+  const usable = mapped.filter(
+    (m) => m.bioguideId && m.name && m.state && m.party
+  );
+
+  if (usable.length) {
+    console.log(
+      "Congress sync: usable normalized members:",
+      usable.length,
+      "sample:",
+      usable[0]
+    );
+  } else {
+    console.log("Congress sync: usable normalized members: 0 sample: undefined");
+  }
+
+  return usable;
 }
 
 // Admin-only endpoint to sync all current House/Senate members into politicians
@@ -538,9 +533,9 @@ app.post("/api/admin/sync-members", requireAdmin, async (req, res) => {
   }
 });
 
-// ======================
-//  CONGRESS.GOV - BILLS
-// ======================
+// -----------------------------
+//   CONGRESS.GOV BILLS
+// -----------------------------
 
 function normalizeCongressBill(apiBill) {
   const congress = apiBill.congress || null;
@@ -591,7 +586,7 @@ async function fetchRecentBillsFromCongressGov() {
   const baseUrl = "https://api.congress.gov/v3/bill";
   const limit = 50;
   let offset = 0;
-  const maxPages = 30;
+  const maxPages = 30; // 1500 bills max
   const results = [];
   let stop = false;
 
@@ -618,6 +613,11 @@ async function fetchRecentBillsFromCongressGov() {
     for (const apiBill of apiBills) {
       const normalized = normalizeCongressBill(apiBill);
       if (!normalized) continue;
+
+      // optional: skip future congress if you want only CURRENT_CONGRESS and below
+      if (normalized.congress && normalized.congress > CURRENT_CONGRESS) {
+        continue;
+      }
 
       if (normalized.billDate && normalized.billDate < BILL_IMPORT_CUTOFF) {
         stop = true;
@@ -651,7 +651,7 @@ async function syncRecentBillsIntoDb() {
 
       const existing = await client.query(
         `
-        SELECT id, title, bill_date, gov_link
+        SELECT id
         FROM bills
         WHERE congress = $1 AND bill_type = $2 AND bill_number = $3
       `,
@@ -736,13 +736,13 @@ app.post("/api/admin/sync-bills", requireAdmin, async (req, res) => {
   }
 });
 
-// ==========================
-//  CONGRESS.GOV - BILL VOTES
-// ==========================
+// -----------------------------
+//   CONGRESS.GOV VOTES
+// -----------------------------
 
 function normalizeVotePositionToOurVote(positionRaw) {
   if (!positionRaw) return "Abstained";
-  const p = positionRaw.toLowerCase();
+  const p = String(positionRaw).toLowerCase();
   if (p.startsWith("yea") || p === "yes" || p === "aye") return "Approved";
   if (p.startsWith("nay") || p === "no") return "Opposed";
   return "Abstained";
@@ -780,10 +780,7 @@ async function fetchVotePositionsForBill(billRow) {
 
   const votesData = await votesRes.json();
   const votes = votesData.votes || [];
-  if (!votes.length) {
-    console.log("[votes] bill has no votes array");
-    return [];
-  }
+  if (!votes.length) return [];
 
   const primary = votes[0];
 
@@ -797,7 +794,7 @@ async function fetchVotePositionsForBill(billRow) {
   }
 
   let detailUrl;
-  if (voteChamber.toLowerCase().startsWith("house")) {
+  if (String(voteChamber).toLowerCase().startsWith("house")) {
     detailUrl = new URL(
       `https://api.congress.gov/v3/house-vote/${billRow.congress}/${sessionNumber}/${rollNumber}`
     );
@@ -808,8 +805,6 @@ async function fetchVotePositionsForBill(billRow) {
   }
   detailUrl.searchParams.set("api_key", CONGRESS_API_KEY);
   detailUrl.searchParams.set("format", "json");
-
-  console.log("[votes] detail URL", detailUrl.toString());
 
   const detailRes = await fetch(detailUrl);
   if (!detailRes.ok) {
@@ -828,8 +823,6 @@ async function fetchVotePositionsForBill(billRow) {
     detail.votePositions ||
     detail.members ||
     [];
-
-  console.log("[votes] positions length", positions.length);
 
   return positions.map((p) => ({
     bioguideId: p.bioguideId || (p.member && p.member.bioguideId) || null,
@@ -903,26 +896,9 @@ async function syncVotesForBill(billId) {
   ]);
 }
 
-// ===================
-//  AUTH
-// ===================
-
-app.post("/api/login", (req, res) => {
-  const { password } = req.body || {};
-  if (!password) {
-    return res.status(400).json({ error: "Password required" });
-  }
-  if (password !== ADMIN_PASSWORD) {
-    return res.status(401).json({ error: "Invalid password" });
-  }
-  const token = crypto.randomUUID();
-  adminTokens.add(token);
-  res.json({ token });
-});
-
-// ===================
-//  MEMBERS
-// ===================
+// -----------------------------
+//   MEMBERS API
+// -----------------------------
 
 app.get("/api/members", async (req, res) => {
   try {
@@ -1075,7 +1051,7 @@ app.put("/api/members/:id", requireAdmin, async (req, res) => {
 
   try {
     const result = await pool.query(query, values);
-    if (!result.rows.length) {
+    if (result.rows.length === 0) {
       return res.status(404).json({ error: "Not found" });
     }
     res.json(result.rows[0]);
@@ -1107,7 +1083,7 @@ app.delete("/api/members/:id", requireAdmin, async (req, res) => {
     `,
       [id]
     );
-    if (!result.rows.length) {
+    if (result.rows.length === 0) {
       return res.status(404).json({ error: "Not found" });
     }
     res.json(result.rows[0]);
@@ -1119,7 +1095,7 @@ app.delete("/api/members/:id", requireAdmin, async (req, res) => {
 
 app.post("/api/members/reorder", requireAdmin, async (req, res) => {
   const { ids } = req.body || {};
-  if (!Array.isArray(ids) || !ids.length) {
+  if (!Array.isArray(ids) || ids.length === 0) {
     return res.status(400).json({ error: "ids array required" });
   }
 
@@ -1175,7 +1151,7 @@ app.get("/api/members/:id", async (req, res) => {
       [id]
     );
 
-    if (!result.rows.length) {
+    if (result.rows.length === 0) {
       return res.status(404).json({ error: "Not found" });
     }
 
@@ -1186,9 +1162,9 @@ app.get("/api/members/:id", async (req, res) => {
   }
 });
 
-// ===================
-//  BILLS (GLOBAL)
-// ===================
+// -----------------------------
+//   BILLS (PUBLIC)
+// -----------------------------
 
 app.get("/api/bills", async (req, res) => {
   const { chamber } = req.query;
@@ -1320,7 +1296,7 @@ app.put("/api/bills/:id", requireAdmin, async (req, res) => {
     if (key in req.body) updates[key] = req.body[key];
   }
 
-  if (!Object.keys(updates).length) {
+  if (Object.keys(updates).length === 0) {
     return res.status(400).json({ error: "No valid fields to update" });
   }
 
@@ -1339,6 +1315,7 @@ app.put("/api/bills/:id", requireAdmin, async (req, res) => {
   const setClauses = [];
   const values = [];
   let idx = 1;
+
   for (const [key, value] of Object.entries(updates)) {
     setClauses.push(`${fieldToColumn[key]} = $${idx++}`);
     values.push(value);
@@ -1365,7 +1342,7 @@ app.put("/api/bills/:id", requireAdmin, async (req, res) => {
   try {
     const result = await pool.query(query, values);
 
-    if (!result.rows.length) {
+    if (result.rows.length === 0) {
       return res.status(404).json({ error: "Bill not found" });
     }
 
@@ -1408,7 +1385,7 @@ app.delete("/api/bills/:id", requireAdmin, async (req, res) => {
       [id]
     );
 
-    if (!result.rows.length) {
+    if (result.rows.length === 0) {
       return res.status(404).json({ error: "Bill not found" });
     }
 
@@ -1423,16 +1400,64 @@ app.delete("/api/bills/:id", requireAdmin, async (req, res) => {
   }
 });
 
-// =======================
-//  ADMIN DOCKET ENDPOINTS
-// =======================
+// -----------------------------
+//   ADMIN DOCKET (PAGINATED)
+// -----------------------------
 
+// GET /api/admin/docket?page=1&pageSize=50&congress=118&hasVotes=true
 app.get("/api/admin/docket", requireAdmin, async (req, res) => {
-  const limit = Math.min(parseInt(req.query.limit || "100", 10), 500);
-  const offset = parseInt(req.query.offset || "0", 10);
+  const page = Math.max(parseInt(req.query.page || "1", 10), 1);
+  const pageSizeRaw = parseInt(req.query.pageSize || "50", 10);
+  const pageSize = Math.min(Math.max(pageSizeRaw || 50, 1), 200);
+
+  const congressFilter = req.query.congress
+    ? parseInt(req.query.congress, 10)
+    : null;
+
+  let hasVotes = null;
+  if (typeof req.query.hasVotes === "string" && req.query.hasVotes.length) {
+    hasVotes = req.query.hasVotes === "true";
+  }
+
+  const whereParts = ["af_position IS NULL"];
+  const params = [];
+  let idx = 1;
+
+  // Congress filter: if provided, use it. Otherwise, default to CURRENT_CONGRESS and below.
+  if (!Number.isNaN(congressFilter) && congressFilter > 0) {
+    whereParts.push(`congress = $${idx++}`);
+    params.push(congressFilter);
+  } else {
+    whereParts.push(`(congress IS NULL OR congress <= $${idx++})`);
+    params.push(CURRENT_CONGRESS);
+  }
+
+  // Optional filter based on presence of votes in our DB
+  if (hasVotes === true) {
+    whereParts.push(
+      `EXISTS (SELECT 1 FROM member_votes mv WHERE mv.bill_id = bills.id)`
+    );
+  } else if (hasVotes === false) {
+    whereParts.push(
+      `NOT EXISTS (SELECT 1 FROM member_votes mv WHERE mv.bill_id = bills.id)`
+    );
+  }
+
+  const whereSql = "WHERE " + whereParts.join(" AND ");
+  const offset = (page - 1) * pageSize;
 
   try {
-    const result = await pool.query(
+    const countResult = await pool.query(
+      `SELECT COUNT(*) AS count FROM bills ${whereSql}`,
+      params
+    );
+    const total = parseInt(countResult.rows[0].count, 10) || 0;
+    const totalPages = total > 0 ? Math.ceil(total / pageSize) : 1;
+
+    params.push(pageSize);
+    params.push(offset);
+
+    const rowsResult = await pool.query(
       `
       SELECT
         id,
@@ -1446,20 +1471,27 @@ app.get("/api/admin/docket", requireAdmin, async (req, res) => {
         bill_type AS "billType",
         bill_number AS "billNumber"
       FROM bills
-      WHERE af_position IS NULL
+      ${whereSql}
       ORDER BY bill_date DESC NULLS LAST, title ASC
-      LIMIT $1 OFFSET $2;
+      LIMIT $${idx++} OFFSET $${idx++};
     `,
-      [limit, offset]
+      params
     );
 
-    res.json(result.rows);
+    res.json({
+      items: rowsResult.rows,
+      page,
+      pageSize,
+      total,
+      totalPages,
+    });
   } catch (err) {
     console.error("Error fetching docket bills:", err);
     res.status(500).json({ error: "Server error" });
   }
 });
 
+// rate a bill in the docket and then sync votes
 app.post("/api/admin/docket/:id/rate", requireAdmin, async (req, res) => {
   const { id } = req.params;
   const { afPosition } = req.body || {};
@@ -1471,9 +1503,9 @@ app.post("/api/admin/docket/:id/rate", requireAdmin, async (req, res) => {
       .json({ error: "afPosition must be one of: " + allowed.join(", ") });
   }
 
-  console.log("[docket/rate] rated bill", id, "as", afPosition);
-
   try {
+    console.log("[docket/rate] rated bill", id, "as", afPosition);
+
     const result = await pool.query(
       `
       UPDATE bills
@@ -1522,9 +1554,9 @@ app.post("/api/admin/docket/:id/rate", requireAdmin, async (req, res) => {
   }
 });
 
-// ===================
-//  MEMBER <-> BILLS
-// ===================
+// -----------------------------
+//   MEMBER <-> BILLS
+// -----------------------------
 
 app.get("/api/members/:id/bills", async (req, res) => {
   const { id } = req.params;
@@ -1619,7 +1651,7 @@ app.delete("/api/members/:id/bills/:billId", requireAdmin, async (req, res) => {
       [memberId, billId]
     );
 
-    if (!result.rows.length) {
+    if (result.rows.length === 0) {
       return res
         .status(404)
         .json({ error: "Vote not found for this member/bill" });
@@ -1634,7 +1666,10 @@ app.delete("/api/members/:id/bills/:billId", requireAdmin, async (req, res) => {
   }
 });
 
-// --- start ---
+// -----------------------------
+//   START SERVER
+// -----------------------------
+
 const PORT = process.env.PORT || 3000;
 
 initDb()
