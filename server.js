@@ -275,35 +275,35 @@ async function fetchAllCurrentMembersFromCongressGov() {
 function normalizeCongressMembers(rawMembers) {
   const normalized = rawMembers
     .map((m) => {
-      // bioguide id
-      const bioguideId = m.bioguideId || m.bioguide_id || null;
+      // IMPORTANT: handle nested `member` objects and multiple field names
+      const base = m.member || m;
 
-      // name
-      const fullName =
-        m.fullName ||
-        m.directOrderName ||
-        [m.firstName || m.first_name, m.lastName || m.last_name]
-          .filter(Boolean)
-          .join(" ") ||
+      const bioguideId =
+        base.bioguideId ||
+        base.bioguide_id ||
+        (base.identifiers && base.identifiers.bioguideId) ||
         null;
 
-      // latest status usually carries current chamber/state/party
-      const latest = m.latestStatus || m.latest_status || {};
+      const fullName =
+        base.fullName ||
+        [base.firstName, base.lastName].filter(Boolean).join(" ") ||
+        null;
 
-      let chamber = latest.chamber || m.chamber || null;
+      let chamber = base.chamber || base.office || null;
       if (chamber === "House of Representatives") chamber = "House";
 
-      let state = latest.state || m.state || null;
+      let state =
+        base.state ||
+        base.stateCode ||
+        (base.district && base.district.stateCode) ||
+        null;
       if (state) state = state.toUpperCase();
 
-      const partyName =
-        latest.partyName ||
-        latest.party ||
-        m.partyName ||
-        m.party ||
+      let party =
+        base.party ||
+        base.partyName ||
+        (base.parties && base.parties[0] && base.parties[0].name) ||
         null;
-
-      let party = partyName;
       if (party) {
         const p = party.toLowerCase();
         if (p.startsWith("republican")) party = "R";
@@ -322,9 +322,15 @@ function normalizeCongressMembers(rawMembers) {
         m.party
     );
 
-  console.log("Congress sync: usable normalized members:", normalized.length);
+  console.log(
+    "Congress sync: usable normalized members:",
+    normalized.length,
+    "sample:",
+    normalized[0]
+  );
   return normalized;
 }
+
 
 // Admin-only endpoint to sync all current House/Senate members into politicians
 app.post("/api/admin/sync-members", requireAdmin, async (req, res) => {
