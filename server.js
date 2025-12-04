@@ -7,7 +7,6 @@ import crypto from "crypto";
 import pkg from "pg";
 
 const { Pool } = pkg;
-
 const app = express();
 
 // --- config ---
@@ -17,15 +16,12 @@ const CONGRESS_API_KEY =
   process.env.CONGRESS_API_KEY ||
   "NUtl5kWwSI4bWZKgjAbWxwALpFfL3gHWFPrwh0P0";
 
-// hard-coded for now; update when 119th Congress starts
 const CURRENT_CONGRESS = 118;
-// don't import bills older than this
 const BILL_IMPORT_CUTOFF = new Date("2023-01-01T00:00:00Z");
 
 if (!DATABASE_URL) {
   console.error("DATABASE_URL is not set. Please add it in Render environment.");
 }
-
 if (!CONGRESS_API_KEY) {
   console.error("CONGRESS_API_KEY is not set. Congress.gov integration will fail.");
 }
@@ -92,7 +88,7 @@ async function recomputeScoresForMember(memberId) {
 
 // --- middleware ---
 app.use(cors());
-app.use(express.json({ limit: "5mb" })); // allow image data URLs
+app.use(express.json({ limit: "5mb" }));
 
 // static files
 const __filename = fileURLToPath(import.meta.url);
@@ -125,7 +121,7 @@ function requireAdmin(req, res, next) {
   return res.status(401).json({ error: "Unauthorized" });
 }
 
-// Full state name -> 2-letter postal code
+// --- state normalization ---
 const STATE_NAME_TO_ABBR = {
   ALABAMA: "AL",
   ALASKA: "AK",
@@ -182,25 +178,24 @@ const STATE_NAME_TO_ABBR = {
 
 function normalizeState(rawState) {
   if (!rawState) return null;
+  if (typeof rawState !== "string") return null;
 
-  if (typeof rawState === "string") {
-    let val = rawState.trim();
-    if (!val) return null;
+  let val = rawState.trim();
+  if (!val) return null;
 
-    if (val.length === 2) {
-      return val.toUpperCase();
-    }
+  if (val.length === 2) {
+    return val.toUpperCase();
+  }
 
-    const upper = val.toUpperCase();
-    const base = upper.split("(")[0].trim();
+  const upper = val.toUpperCase();
+  const base = upper.split("(")[0].trim(); // remove " (At Large)" etc
 
-    if (base.length === 2) {
-      return base;
-    }
+  if (base.length === 2) {
+    return base;
+  }
 
-    if (STATE_NAME_TO_ABBR[base]) {
-      return STATE_NAME_TO_ABBR[base];
-    }
+  if (STATE_NAME_TO_ABBR[base]) {
+    return STATE_NAME_TO_ABBR[base];
   }
 
   return null;
@@ -208,7 +203,6 @@ function normalizeState(rawState) {
 
 // --- DB bootstrap ---
 async function initDb() {
-  // politicians table
   await pool.query(`
     CREATE TABLE IF NOT EXISTS politicians (
       id UUID PRIMARY KEY,
@@ -230,7 +224,6 @@ async function initDb() {
     ADD COLUMN IF NOT EXISTS bioguide_id TEXT UNIQUE;
   `);
 
-  // global bills table
   await pool.query(`
     CREATE TABLE IF NOT EXISTS bills (
       id UUID PRIMARY KEY,
@@ -243,7 +236,6 @@ async function initDb() {
     );
   `);
 
-  // add congress.gov identity columns + votes_synced
   await pool.query(`
     ALTER TABLE bills
     ADD COLUMN IF NOT EXISTS congress INTEGER,
@@ -266,7 +258,6 @@ async function initDb() {
     END $$;
   `);
 
-  // member_votes: link politician -> bill with their vote
   await pool.query(`
     CREATE TABLE IF NOT EXISTS member_votes (
       id UUID PRIMARY KEY,
@@ -284,7 +275,6 @@ async function initDb() {
     ADD COLUMN IF NOT EXISTS is_current_congress BOOLEAN DEFAULT FALSE;
   `);
 
-  // Seed politicians the first time
   const { rows } = await pool.query("SELECT COUNT(*) AS count FROM politicians");
   const count = parseInt(rows[0].count, 10);
   if (count === 0) {
@@ -330,10 +320,7 @@ async function fetchAllCurrentMembersFromCongressGov() {
     if (!res.ok) {
       const text = await res.text();
       throw new Error(
-        `Congress.gov member request failed: ${res.status} – ${text.slice(
-          0,
-          200
-        )}`
+        `Congress.gov member request failed: ${res.status} – ${text.slice(0, 200)}`
       );
     }
 
@@ -353,101 +340,114 @@ async function fetchAllCurrentMembersFromCongressGov() {
 }
 
 function normalizeCongressMembers(rawMembers) {
-  const normalized = rawMembers.map((m, idx) => {
-    const bioguideId = m.bioguideId || null;
+  const normalized = rawMembers
+    .map((m, idx) => {
+      const bioguideId =
+        m.bioguideId ||
+        (m.member && m.member.bioguideId) ||
+        null;
 
-    const name =
-      m.fullName ||
-      [m.firstName, m.lastName].filter(Boolean).join(" ") ||
-      null;
+      const fullName =
+        m.fullName ||
+        m.name ||
+        (m.member && (m.member.fullName || m.member.name)) ||
+        [m.firstName, m.lastName].filter(Boolean).join(" ") ||
+        null;
 
-    // Try to pull *something* that represents the state, then normalize it
-    const rawState =
-      m.stateCode ||
-      (typeof m.state === "string" ? m.state : null) ||
-      (m.state && (m.state.code || m.state.postal)) ||
-      (m.roles && m.roles[0] && (m.roles[0].state || m.roles[0].stateCode)) ||
-      null;
+      const rawState =
+        m.stateCode ||
+        (typeof m.state === "string" ? m.state : null) ||
+        (m.state && (m.state.code || m.state.postal)) ||
+        (m.roles && m.roles[0] && (m.roles[0].state || m.roles[0].stateCode)) ||
+        (m.member &&
+          (m.member.stateCode ||
+            (typeof m.member.state === "string" ? m.member.state : null) ||
+            (m.member.state &&
+              (m.member.state.code || m.member.state.postal)))) ||
+        null;
 
-    const normalizedState = normalizeState(rawState);
+      const state = normalizeState(rawState);
 
-    // Try multiple possible fields for party
-    let party =
-      m.party ||
-      m.partyName ||
-      m.partyCode ||
-      (m.terms && m.terms[0] && (m.terms[0].party || m.terms[0].partyName)) ||
-      (m.roles && m.roles[0] && (m.roles[0].party || m.roles[0].partyName)) ||
-      null;
+      let chamber =
+        m.chamber ||
+        (m.terms && m.terms[0] && m.terms[0].chamber) ||
+        (m.roles && m.roles[0] && m.roles[0].chamber) ||
+        (m.member &&
+          (m.member.chamber ||
+            (m.member.roles &&
+              m.member.roles[0] &&
+              m.member.roles[0].chamber))) ||
+        null;
 
-    if (party) {
-      const p = party.toLowerCase();
-      if (p.startsWith("republican"))       party = "R";
-      else if (p.startsWith("democrat"))    party = "D";
-      else if (p.startsWith("independent")) party = "I";
-      else if (p === "r" || p === "d" || p === "i") party = p.toUpperCase();
-      else party = party.toUpperCase().slice(0, 3);
-    }
+      if (typeof chamber === "string") {
+        const lc = chamber.toLowerCase();
+        if (lc.includes("house")) chamber = "House";
+        else if (lc.includes("senate")) chamber = "Senate";
+      }
 
-    // Chamber is nice to have but NOT required
-    let chamber =
-      m.chamber ||
-      (m.roles && m.roles[0] && m.roles[0].chamber) ||
-      (m.role && m.role.chamber) ||
-      null;
+      let partyRaw =
+        m.party ||
+        (m.terms && m.terms[0] && m.terms[0].party) ||
+        (m.roles && m.roles[0] && m.roles[0].party) ||
+        (m.member &&
+          (m.member.party ||
+            (m.member.terms &&
+              m.member.terms[0] &&
+              m.member.terms[0].party) ||
+            (m.member.roles &&
+              m.member.roles[0] &&
+              m.member.roles[0].party))) ||
+        null;
 
-    if (typeof chamber === "string") {
-      const lc = chamber.toLowerCase();
-      if (lc.includes("house"))      chamber = "House";
-      else if (lc.includes("senate")) chamber = "Senate";
-      else if (lc === "representative") chamber = "House";
-    }
+      let party = null;
+      if (partyRaw && typeof partyRaw === "string") {
+        const p = partyRaw.toLowerCase();
+        if (p.startsWith("republican")) party = "R";
+        else if (p.startsWith("democrat")) party = "D";
+        else if (p.startsWith("independent")) party = "I";
+        else party = partyRaw.toUpperCase().slice(0, 3);
+      }
 
-    // Debug a handful so we can see what's going on in logs
-    if (idx < 25) {
-      console.log("[normalizeCongressMembers] sample", {
+      if (idx < 25) {
+        console.log("[normalizeCongressMembers] sample raw", {
+          bioguideId,
+          fullName,
+          rawState,
+          normalizedState: state,
+          partyRaw,
+          party,
+          chamber,
+        });
+      }
+
+      return {
         bioguideId,
-        name,
-        rawState,
-        normalizedState,
-        party,
+        name: fullName,
         chamber,
-      });
-    }
+        state,
+        party,
+      };
+    })
+    // ONLY require id + valid 2-letter state; name/party/chamber are optional
+    .filter(
+      (m) =>
+        m.bioguideId &&
+        m.state &&
+        m.state.length === 2
+    );
 
-    return {
-      bioguideId,
-      name,
-      state: normalizedState,
-      party,
-      chamber,
-    };
-  });
-
-  // ✅ ONLY require bioguideId + name + valid 2-letter state.
-  //    Party/chamber are allowed to be null.
-  const usable = normalized.filter(
-    (m) =>
-      m.bioguideId &&
-      m.name &&
-      m.state &&
-      m.state.length === 2
-  );
-
-  if (usable.length) {
+  if (normalized.length) {
     console.log(
       "Congress sync: usable normalized members:",
-      usable.length,
+      normalized.length,
       "sample:",
-      usable[0]
+      normalized[0]
     );
   } else {
-    console.log(
-      "Congress sync: usable normalized members: 0 sample: undefined"
-    );
+    console.log("Congress sync: usable normalized members: 0 sample: undefined");
   }
 
-  return usable;
+  return normalized;
 }
 
 // Admin-only endpoint to sync all current House/Senate members into politicians
@@ -581,7 +581,6 @@ async function fetchRecentBillsFromCongressGov() {
   let offset = 0;
   const maxPages = 30;
   const results = [];
-
   let stop = false;
 
   for (let page = 0; page < maxPages && !stop; page++) {
@@ -596,10 +595,7 @@ async function fetchRecentBillsFromCongressGov() {
     if (!res.ok) {
       const text = await res.text();
       throw new Error(
-        `Congress.gov bill request failed: ${res.status} – ${text.slice(
-          0,
-          200
-        )}`
+        `Congress.gov bill request failed: ${res.status} – ${text.slice(0, 200)}`
       );
     }
 
