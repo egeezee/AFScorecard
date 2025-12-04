@@ -18,7 +18,7 @@ const CONGRESS_API_KEY =
   "NUtl5kWwSI4bWZKgjAbWxwALpFfL3gHWFPrwh0P0";
 
 // update when 119th Congress truly “current”
-const CURRENT_CONGRESS = 118;
+const CURRENT_CONGRESS = 119;
 // don't import bills older than this
 const BILL_IMPORT_CUTOFF = new Date("2023-01-01T00:00:00Z");
 
@@ -565,80 +565,72 @@ app.post("/api/admin/sync-members", requireAdmin, async (req, res) => {
 function normalizeCongressBill(apiBill) {
   if (!apiBill) return null;
 
-  const congress =
-    apiBill.congress ||
-    apiBill.congressNumber ||
-    apiBill.congressNum ||
-    null;
+  // Handle both { ... } and { bill: { ... } } shapes
+  const b = apiBill.bill || apiBill;
 
-  const billTypeRaw =
-    apiBill.type ||
-    apiBill.billType ||
-    (apiBill.bill && apiBill.bill.type) ||
-    null;
+  const congressRaw =
+    b.congress ?? b.congressNumber ?? b.congressNum ?? null;
+  const congress = congressRaw ? parseInt(congressRaw, 10) : null;
 
-  const billNumberRaw =
-    apiBill.number ||
-    apiBill.billNumber ||
-    (apiBill.bill && apiBill.bill.number) ||
-    null;
-
+  const billTypeRaw = b.type ?? b.billType ?? null;
+  const billNumberRaw = b.number ?? b.billNumber ?? null;
   const billNumber = billNumberRaw ? parseInt(billNumberRaw, 10) : null;
-  const billType = billTypeRaw ? String(billTypeRaw).toLowerCase() : null;
 
-  // Only *hard* requirement: congress + type + number, otherwise we can't
-  // build the URL for the votes endpoint.
-  if (!congress || !billType || !billNumber) {
+  // We need these three to build vote URLs and dedupe
+  if (!congress || !billTypeRaw || !billNumber) {
     return null;
   }
 
-  // Title – try everything, fall back to generic
+  const billType = String(billTypeRaw).toLowerCase();
+
   let title =
+    b.title ||
+    b.titleWithoutNumber ||
+    b.shortTitle ||
+    b.formattedTitle ||
     apiBill.title ||
-    apiBill.titleWithoutNumber ||
-    apiBill.shortTitle ||
-    apiBill.formattedTitle ||
-    (apiBill.bill && (apiBill.bill.title || apiBill.bill.titleWithoutNumber)) ||
     null;
 
   if (!title) {
     title = `${String(billType).toUpperCase()} ${billNumber}`;
   }
 
-  // Latest action date -> billDate
   const latestAction =
+    b.latestAction ||
+    b.latestMajorAction ||
+    (Array.isArray(b.actions) && b.actions[0]) ||
     apiBill.latestAction ||
     apiBill.latestMajorAction ||
     (Array.isArray(apiBill.actions) && apiBill.actions[0]) ||
     null;
 
   let billDate = null;
-  if (latestAction && latestAction.actionDate) {
+  if (latestAction?.actionDate) {
     billDate = new Date(latestAction.actionDate);
-  } else if (latestAction && latestAction.date) {
+  } else if (latestAction?.date) {
     billDate = new Date(latestAction.date);
-  } else if (apiBill.updateDate) {
-    billDate = new Date(apiBill.updateDate);
+  } else if (b.updateDate) {
+    billDate = new Date(b.updateDate);
   }
 
-  // Link
   const govLink =
-    apiBill.url ||
-    (latestAction && latestAction.url) ||
+    b.url ||
+    latestAction?.url ||
+    b.congressdotgov_url ||
     apiBill.congressdotgov_url ||
     null;
 
-  // Chamber
   let chamber =
+    b.originChamber ||
+    b.chamber ||
     apiBill.originChamber ||
     apiBill.chamber ||
-    (apiBill.bill && apiBill.bill.originChamber) ||
     null;
 
   if (!chamber && billType.startsWith("h")) chamber = "House";
   if (!chamber && billType.startsWith("s")) chamber = "Senate";
 
-  const normalized = {
+  return {
     congress,
     billType,
     billNumber,
@@ -647,8 +639,6 @@ function normalizeCongressBill(apiBill) {
     billDate,
     govLink,
   };
-
-  return normalized;
 }
 
 async function fetchRecentBillsFromCongressGov() {
@@ -657,7 +647,7 @@ async function fetchRecentBillsFromCongressGov() {
   const baseUrl = "https://api.congress.gov/v3/bill";
   const limit = 50;
   let offset = 0;
-  const maxPages = 30; // 1500 bills max
+  const maxPages = 30; // up to 1500 bills
   const results = [];
   let stop = false;
 
@@ -668,6 +658,11 @@ async function fetchRecentBillsFromCongressGov() {
     url.searchParams.set("limit", String(limit));
     url.searchParams.set("offset", String(offset));
     url.searchParams.set("sort", "latestActionDate+desc");
+
+    // 👇 NEW: explicitly ask for the current Congress
+    if (CURRENT_CONGRESS) {
+      url.searchParams.set("congress", String(CURRENT_CONGRESS));
+    }
 
     const res = await fetch(url);
     if (!res.ok) {
@@ -681,18 +676,15 @@ async function fetchRecentBillsFromCongressGov() {
     const apiBills = data.bills || [];
     if (!apiBills.length) break;
 
+    if (page === 0 && apiBills.length) {
+      console.log("[bill-sync] first raw bill sample:", apiBills[0]);
+    }
+
     for (const apiBill of apiBills) {
       const normalized = normalizeCongressBill(apiBill);
       if (!normalized) continue;
 
-      // optional: skip future congress if you want only CURRENT_CONGRESS and below
-      if (
-        normalized.congress &&
-        Number(normalized.congress) > Number(CURRENT_CONGRESS)
-      ) {
-        continue;
-      }
-
+      // stop once we hit bills before cutoff
       if (normalized.billDate && normalized.billDate < BILL_IMPORT_CUTOFF) {
         stop = true;
         break;
@@ -706,12 +698,17 @@ async function fetchRecentBillsFromCongressGov() {
     if (!pagination.next) break;
   }
 
-  console.log(
-    "Congress bill sync: normalized bills:",
-    results.length,
-    "sample:",
-    results[0]
-  );
+  if (results.length) {
+    console.log(
+      "Congress bill sync: normalized bills:",
+      results.length,
+      "sample:",
+      results[0]
+    );
+  } else {
+    console.log("Congress bill sync: normalized bills: 0 sample: undefined");
+  }
+
   return results;
 }
 
